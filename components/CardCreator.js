@@ -76,7 +76,7 @@ export function loadGoogleFont(fontName) {
 export default function CardCreator({ card, onChangeCard, onSaveCard }) {
   const [activeTab, setActiveTab] = useState('design'); // design, content, graphics
   const [showIconModal, setShowIconModal] = useState(false);
-  const [showArtIconModal, setShowArtIconModal] = useState(false);
+  const [showArtModal, setShowArtModal] = useState(false);
 
   // Dynamic Google Font loader hook
   useEffect(() => {
@@ -500,113 +500,108 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
             `}
           </div>
         `}
-
         <!-- GRAPHICS / UPLOADER TAB -->
         ${activeTab === 'graphics' && html`
           <div class="form-section">
-            <h3 class="section-title">Illustration & Custom Backgrounds</h3>
+            <h3 class="section-title">Illustration &amp; Custom Backgrounds</h3>
             
-            <!-- Card Art / Background -->
+            <!-- Card Art / Illustration Frame -->
             <div class="form-group">
-              <label class="input-label">Illustration / Card Art Frame</label>
-              <div class="upload-area">
-                <input 
-                  type="file" 
-                  id="art-upload-input" 
-                  accept="image/*" 
-                  onChange=${(e) => handleImageUpload(e, 'cardArt')}
-                  class="hidden-file-input"
-                />
-                <label for="art-upload-input" class="upload-trigger-label">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                  </svg>
-                  <span>Upload Main Illustration</span>
-                </label>
-                
-                ${card.cardArt && html`
-                  <div class="graphic-preview-thumbnail full-width-thumb">
-                    <img src=${card.cardArt} alt="illustration thumbnail" />
-                    <div class="thumbnail-meta">
-                      <span>Art Image Uploaded</span>
-                      <button type="button" class="remove-graphic-btn" onClick=${() => removeGraphic('cardArt')}>Remove</button>
-                    </div>
-                  </div>
-                `}
-              </div>
-            </div>
+              <label class="input-label">Illustration Frame (Front of Card)</label>
 
-            <!-- ILLUSTRATION FRAME OVERLAY ICON -->
-            <div class="form-group margin-top-sm">
-              <label class="input-label">Art Frame Overlay Icon</label>
+              <!-- Mode Toggle -->
               <div class="icon-toggle-row">
-                <button 
-                  type="button" 
-                  class="toggle-choice-btn ${(!card.artIconType || card.artIconType === 'none') ? 'active' : ''}"
-                  onClick=${() => handleTextChange('artIconType', 'none')}
+                <button
+                  type="button"
+                  class="toggle-choice-btn ${(!card.cardArtType || card.cardArtType === 'upload') ? 'active' : ''}"
+                  onClick=${() => handleTextChange('cardArtType', 'upload')}
                 >
-                  None
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                  </svg>
+                  Upload Image
                 </button>
-                <button 
-                  type="button" 
-                  class="toggle-choice-btn ${card.artIconType === 'vector' ? 'active' : ''}"
-                  onClick=${() => handleTextChange('artIconType', 'vector')}
+                <button
+                  type="button"
+                  class="toggle-choice-btn ${card.cardArtType === 'icon' ? 'active' : ''}"
+                  onClick=${() => handleTextChange('cardArtType', 'icon')}
                 >
-                  Vector Icon
-                </button>
-                <button 
-                  type="button" 
-                  class="toggle-choice-btn ${card.artIconType === 'upload' ? 'active' : ''}"
-                  onClick=${() => handleTextChange('artIconType', 'upload')}
-                >
-                  Custom File
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 8l4 4-4 4M8 12h8"/>
+                  </svg>
+                  Icon Library
                 </button>
               </div>
 
-              ${card.artIconType === 'upload' ? html`
+              <!-- Upload Image Mode -->
+              ${(!card.cardArtType || card.cardArtType === 'upload') && html`
                 <div class="upload-area margin-top-sm">
-                  <input 
-                    type="file" 
-                    id="art-icon-upload-input" 
-                    accept="image/*" 
-                    onChange=${(e) => handleImageUpload(e, 'artIconUpload')}
+                  <input
+                    type="file"
+                    id="art-upload-input"
+                    accept="image/*"
+                    onChange=${(e) => handleImageUpload(e, 'cardArt')}
                     class="hidden-file-input"
                   />
-                  <label for="art-icon-upload-input" class="upload-trigger-label">
+                  <label for="art-upload-input" class="upload-trigger-label">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
                     </svg>
-                    <span>${card.artIconUpload ? 'Change Overlay Icon' : 'Upload PNG/SVG Icon'}</span>
+                    <span>${card.cardArt ? 'Change Illustration Image' : 'Upload JPG / PNG / SVG'}</span>
                   </label>
-                  ${card.artIconUpload && html`
-                    <div class="graphic-preview-thumbnail">
-                      <img src=${card.artIconUpload} alt="icon thumbnail" />
-                      <button type="button" class="remove-graphic-btn" onClick=${() => removeGraphic('artIconUpload')}>Remove</button>
+
+                  ${card.cardArt && html`
+                    <div class="graphic-preview-thumbnail full-width-thumb">
+                      <img src=${card.cardArt} alt="illustration thumbnail" />
+                      <div class="thumbnail-meta">
+                        <span>Art Image Uploaded</span>
+                        <button type="button" class="remove-graphic-btn" onClick=${() => {
+                          onChangeCard({ ...card, cardArt: null, cardArtSvg: null });
+                        }}>Remove</button>
+                      </div>
                     </div>
                   `}
                 </div>
-              ` : card.artIconType === 'vector' ? html`
-                <button 
-                  type="button" 
-                  class="select-vector-trigger-btn margin-top-sm"
-                  onClick=${() => setShowArtIconModal(true)}
-                >
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
-                    <circle cx="12" cy="12" r="10"/><path d="M12 8l4 4-4 4M8 12h8"/>
-                  </svg>
-                  ${card.artIconId ? `Vector Selected: ${card.artIconId.toUpperCase()}` : 'Browse Overlay Vectors'}
-                </button>
-              ` : null}
+              `}
+
+              <!-- Icon Library Mode -->
+              ${card.cardArtType === 'icon' && html`
+                <div class="margin-top-sm">
+                  <button
+                    type="button"
+                    class="select-vector-trigger-btn"
+                    onClick=${() => setShowArtModal(true)}
+                    style="width: 100%;"
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
+                      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    ${card.cardArtIconId ? `Icon: ${card.cardArtIconId}` : 'Browse 275,000+ Icons'}
+                  </button>
+
+                  ${card.cardArtSvg && html`
+                    <div class="art-icon-preview-box">
+                      <div
+                        class="art-icon-preview-inner"
+                        dangerouslySetInnerHTML=${{ __html: card.cardArtSvg }}
+                      />
+                      <button type="button" class="remove-graphic-btn" onClick=${() => {
+                        onChangeCard({ ...card, cardArtSvg: null, cardArtIconId: null });
+                      }}>Remove</button>
+                    </div>
+                  `}
+                </div>
+              `}
             </div>
 
             <!-- Card Back Image -->
             <div class="form-group">
               <label class="input-label">Card Back Image (Overrides pattern)</label>
               <div class="upload-area">
-                <input 
-                  type="file" 
-                  id="back-upload-input" 
-                  accept="image/*" 
+                <input
+                  type="file"
+                  id="back-upload-input"
+                  accept="image/*"
                   onChange=${(e) => handleImageUpload(e, 'cardBackImage')}
                   class="hidden-file-input"
                 />
@@ -630,7 +625,7 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
               <p class="input-hint-text">Leave blank to use the gorgeous default neon-diamond pattern back side.</p>
             </div>
           </div>
-        `}
+        `}}
       </div>
 
       <!-- Action Panel -->
@@ -648,7 +643,7 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
         <div class="modal-overlay" onClick=${() => setShowIconModal(false)}>
           <div class="modal-content glass-panel animate-zoom-in" onClick=${(e) => e.stopPropagation()}>
             <div class="modal-header">
-              <h3>Search Vector Icon Library</h3>
+              <h3>Browse Icon Library — Card Header Icon</h3>
               <button class="close-modal-btn" onClick=${() => setShowIconModal(false)}>
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -658,12 +653,14 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
             
             <${IconPicker} 
               selectedId=${card.iconId} 
-              onSelectIcon=${(id, path) => {
+              onSelectIcon=${(id, svgText) => {
+                // For header icon we still use SVG path extracted from returned SVG text
+                // Parse out the viewBox & path/g content so it renders inline with stroke styling
                 onChangeCard({
                   ...card,
-                  iconType: 'vector',
+                  iconType: 'upload',
                   iconId: id,
-                  iconSvgPath: path
+                  iconUpload: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`
                 });
                 setShowIconModal(false);
               }}
@@ -672,29 +669,30 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
         </div>
       `}
 
-      <!-- VECTOR ICON SELECTOR MODAL (Illustration Frame Overlay Icon) -->
-      ${showArtIconModal && html`
-        <div class="modal-overlay" onClick=${() => setShowArtIconModal(false)}>
+      <!-- ILLUSTRATION FRAME ICON LIBRARY MODAL -->
+      ${showArtModal && html`
+        <div class="modal-overlay" onClick=${() => setShowArtModal(false)}>
           <div class="modal-content glass-panel animate-zoom-in" onClick=${(e) => e.stopPropagation()}>
             <div class="modal-header">
-              <h3>Select Art Frame Overlay Vector</h3>
-              <button class="close-modal-btn" onClick=${() => setShowArtIconModal(false)}>
+              <h3>Browse Icon Library — Illustration Frame</h3>
+              <button class="close-modal-btn" onClick=${() => setShowArtModal(false)}>
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
             </div>
             
-            <${IconPicker} 
-              selectedId=${card.artIconId} 
-              onSelectIcon=${(id, path) => {
+            <${IconPicker}
+              selectedId=${card.cardArtIconId}
+              onSelectIcon=${(id, svgText) => {
                 onChangeCard({
                   ...card,
-                  artIconType: 'vector',
-                  artIconId: id,
-                  artIconSvgPath: path
+                  cardArtType: 'icon',
+                  cardArtIconId: id,
+                  cardArtSvg: svgText,
+                  cardArt: null  // clear any uploaded image when icon is chosen
                 });
-                setShowArtIconModal(false);
+                setShowArtModal(false);
               }}
             />
           </div>

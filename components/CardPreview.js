@@ -182,9 +182,14 @@ export default function CardPreview({ card, forceSide = 'front' }) {
           ` : html`
             <!-- STANDARD CARD LAYOUT -->
             <!-- Card Art Box -->
-            <div class="card-art-box ${card.cardArt ? 'has-art' : ''}">
+            <div class="card-art-box ${(card.cardArt || (card.cardArtType === 'icon' && card.cardArtSvg)) ? 'has-art' : ''}">
               ${card.cardArt ? html`
                 <img src=${card.cardArt} class="card-art-image" alt="Art" />
+              ` : (card.cardArtType === 'icon' && card.cardArtSvg) ? html`
+                <div
+                  class="card-art-full-icon"
+                  dangerouslySetInnerHTML=${{ __html: card.cardArtSvg }}
+                />
               ` : html`
                 <div class="card-art-placeholder">
                   <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3">
@@ -193,19 +198,6 @@ export default function CardPreview({ card, forceSide = 'front' }) {
                     <path d="M21 15l-5-5L5 21"/>
                   </svg>
                   <span>Illustration Frame</span>
-                </div>
-              `}
-
-              <!-- ILLUSTRATION OVERLAY ICON -->
-              ${card.artIconType && card.artIconType !== 'none' && html`
-                <div class="card-art-icon-overlay animate-scale-in">
-                  ${card.artIconType === 'upload' && card.artIconUpload ? html`
-                    <img src=${card.artIconUpload} class="art-overlay-icon-image" alt="uploaded art overlay icon" />
-                  ` : card.artIconType === 'vector' && card.artIconSvgPath ? html`
-                    <svg viewBox="0 0 24 24" class="art-overlay-icon-svg" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d=${card.artIconSvgPath} />
-                    </svg>
-                  ` : null}
                 </div>
               `}
             </div>
