@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { packCards, SHEET_WIDTH, SHEET_HEIGHT, MARGIN, CARD_SIZES } from '../utils/binPacker.js';
+import { packCards, getNextAvailablePosition, SHEET_WIDTH, SHEET_HEIGHT, MARGIN, CARD_SIZES } from '../utils/binPacker.js';
 import CardPreview from './CardPreview.js';
 
 const html = htm.bind(h);
@@ -54,9 +54,12 @@ export default function CardSheetBuilder({
   libraryCards, 
   sheetItems, 
   setSheetItems,
-  onExportPDF
+  onExportPDF,
+  activeSheetIndex,
+  setActiveSheetIndex,
+  sheetCount,
+  setSheetCount
 }) {
-  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [viewMode, setViewMode] = useState('front'); // front, back, split (side-by-side)
   
@@ -85,17 +88,34 @@ export default function CardSheetBuilder({
       });
     });
     setSheetItems(newItems);
+    if (packedSheets.length > 0) {
+      setSheetCount(packedSheets.length);
+      setActiveSheetIndex(Math.min(activeSheetIndex, packedSheets.length - 1));
+    }
   };
 
   const handleAddCardInstance = (card) => {
     const sizeInfo = CARD_SIZES[card.size] || CARD_SIZES['poker'];
+    const currentPageItems = sheetItems.filter(item => item.sheetIndex === activeSheetIndex);
+    const nextPosition = getNextAvailablePosition(currentPageItems, sizeInfo.width, sizeInfo.height);
+
+    let targetSheet = activeSheetIndex;
+    let position = { x: MARGIN, y: MARGIN };
+
+    if (nextPosition) {
+      position = nextPosition;
+    } else {
+      targetSheet = sheetCount;
+      setSheetCount(sheetCount + 1);
+      setActiveSheetIndex(targetSheet);
+    }
+
     const newInstance = {
       id: `instance-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       card: card,
-      sheetIndex: activeSheetIndex,
-      // Default to top-left margin or auto-packed
-      x: MARGIN,
-      y: MARGIN,
+      sheetIndex: targetSheet,
+      x: position.x,
+      y: position.y,
       w: sizeInfo.width,
       h: sizeInfo.height
     };
@@ -173,15 +193,41 @@ export default function CardSheetBuilder({
   };
 
   // Group items by sheet index
-  const maxSheetIndex = Math.max(0, ...sheetItems.map(item => item.sheetIndex));
-  const sheetsCount = maxSheetIndex + 1;
+  const sheetsCount = Math.max(1, sheetCount);
   const activeSheetItems = sheetItems.filter(item => item.sheetIndex === activeSheetIndex);
 
   // Clear sheet templates
   const handleClearSheet = () => {
     if (confirm('Clear all cards from print layouts?')) {
       setSheetItems([]);
+      setSheetCount(1);
+      setActiveSheetIndex(0);
     }
+  };
+
+  const handleAddPage = () => {
+    const nextIndex = sheetCount;
+    setSheetCount(sheetCount + 1);
+    setActiveSheetIndex(nextIndex);
+  };
+
+  const handleDeletePage = () => {
+    if (sheetCount <= 1) return;
+    if (!confirm(`Delete Page ${activeSheetIndex + 1} and its contents?`)) return;
+
+    const remainingItems = sheetItems
+      .filter(item => item.sheetIndex !== activeSheetIndex)
+      .map(item => {
+        if (item.sheetIndex > activeSheetIndex) {
+          return { ...item, sheetIndex: item.sheetIndex - 1 };
+        }
+        return item;
+      });
+
+    const nextIndex = Math.max(0, activeSheetIndex - 1);
+    setSheetItems(remainingItems);
+    setSheetCount(sheetCount - 1);
+    setActiveSheetIndex(nextIndex);
   };
 
   return html`
@@ -201,6 +247,17 @@ export default function CardSheetBuilder({
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
             </svg>
             Intelligent Auto-Pack
+          </button>
+
+          <button class="secondary-btn" onClick=${handleAddPage} title="Create a new blank sheet page">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            New Page
+          </button>
+
+          <button class="secondary-btn delete-btn-secondary" onClick=${handleDeletePage} disabled=${sheetCount <= 1} title="Delete the current sheet page">
+            Delete Page
           </button>
 
           <button class="secondary-btn delete-btn-secondary" onClick=${handleClearSheet} disabled=${sheetItems.length === 0}>
@@ -227,21 +284,19 @@ export default function CardSheetBuilder({
       </div>
 
       <!-- PAGE NAVIGATOR -->
-      ${sheetsCount > 1 && html`
-        <div class="sheet-pagination-bar glass-panel">
-          <span>Active Sheet Layout:</span>
-          <div class="pagination-buttons">
-            ${Array.from({ length: sheetsCount }).map((_, idx) => html`
-              <button 
-                class="pagination-btn ${activeSheetIndex === idx ? 'active' : ''}"
-                onClick=${() => setActiveSheetIndex(idx)}
-              >
-                Page ${idx + 1}
-              </button>
-            `)}
-          </div>
+      <div class="sheet-pagination-bar glass-panel">
+        <span>Active Sheet Layout:</span>
+        <div class="pagination-buttons">
+          ${Array.from({ length: sheetsCount }).map((_, idx) => html`
+            <button 
+              class="pagination-btn ${activeSheetIndex === idx ? 'active' : ''}"
+              onClick=${() => setActiveSheetIndex(idx)}
+            >
+              Page ${idx + 1}
+            </button>
+          `)}
         </div>
-      `}
+      </div>
 
       <!-- INTERACTIVE SHEET AREA -->
       <div class="sheets-flex-container ${viewMode === 'split' ? 'split-view' : ''}">

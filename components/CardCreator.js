@@ -8,40 +8,40 @@ const html = htm.bind(h);
 
 const THEME_PRESETS = [
   {
-    name: 'Eldritch Flame',
-    bgColor: '#1a0d1a',
-    textColor: '#fce7f3',
-    themeColor: '#f43f5e', // Hot pink/red
+    name: 'Modern Blue',
+    bgColor: '#ffffff',
+    textColor: '#1e3a8a',
+    themeColor: '#3b82f6', // Bright Blue
   },
   {
-    name: 'Neon Cyber',
-    bgColor: '#0b132b',
-    textColor: '#e0f2fe',
-    themeColor: '#06b6d4', // Neon Cyan
+    name: 'Vibrant Coral',
+    bgColor: '#ffffff',
+    textColor: '#64748b',
+    themeColor: '#f43f5e', // Coral/Pink
   },
   {
-    name: 'Forest Sentinel',
-    bgColor: '#0f1712',
-    textColor: '#f0fdf4',
-    themeColor: '#10b981', // Emerald Green
+    name: 'Purple Elegance',
+    bgColor: '#ffffff',
+    textColor: '#6b21a8',
+    themeColor: '#a855f7', // Bright Purple
   },
   {
-    name: 'Royal Archives',
-    bgColor: '#171717',
-    textColor: '#fef08a',
-    themeColor: '#eab308', // Gold
+    name: 'Forest Green',
+    bgColor: '#ffffff',
+    textColor: '#15803d',
+    themeColor: '#10b981', // Emerald
   },
   {
-    name: 'Astral Vault',
-    bgColor: '#090d16',
-    textColor: '#e8ecf8',
-    themeColor: '#8b5cf6', // Indigo/Purple
+    name: 'Warm Amber',
+    bgColor: '#ffffff',
+    textColor: '#78350f',
+    themeColor: '#f59e0b', // Amber/Gold
   },
   {
-    name: 'Parchment Scroll',
-    bgColor: '#fcf8f2',
-    textColor: '#1c1917',
-    themeColor: '#7c2d12', // Warm Brown
+    name: 'Sleek Navy',
+    bgColor: '#ffffff',
+    textColor: '#001f3f',
+    themeColor: '#0066cc', // Navy Blue
   }
 ];
 
@@ -459,6 +459,27 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                     ${card.iconId ? `Vector Selected: ${card.iconId.toUpperCase()}` : 'Browse Vector Icons Library'}
                   </button>
                 `}
+
+                <!-- Icon Color Picker (appears after icon selection) -->
+                ${(card.iconUpload || card.iconId) && html`
+                  <div class="form-group margin-top-sm">
+                    <label class="input-label">Icon Color</label>
+                    <div class="color-picker-input-wrapper">
+                      <input 
+                        type="color" 
+                        class="form-color-picker" 
+                        value=${card.iconColor || '#f43f5e'}
+                        onInput=${(e) => handleTextChange('iconColor', e.target.value)}
+                      />
+                      <input 
+                        type="text" 
+                        class="form-text-input hex-input" 
+                        value=${card.iconColor || '#f43f5e'}
+                        onInput=${(e) => handleTextChange('iconColor', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                `}
               </div>
 
               <!-- Card Description -->
@@ -588,6 +609,25 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                       <button type="button" class="remove-graphic-btn" onClick=${() => {
                         onChangeCard({ ...card, cardArtSvg: null, cardArtIconId: null });
                       }}>Remove</button>
+                    </div>
+
+                    <!-- Art Icon Color Picker -->
+                    <div class="form-group margin-top-sm">
+                      <label class="input-label">Illustration Icon Color</label>
+                      <div class="color-picker-input-wrapper">
+                        <input 
+                          type="color" 
+                          class="form-color-picker" 
+                          value=${card.artIconColor || '#f43f5e'}
+                          onInput=${(e) => handleTextChange('artIconColor', e.target.value)}
+                        />
+                        <input 
+                          type="text" 
+                          class="form-text-input hex-input" 
+                          value=${card.artIconColor || '#f43f5e'}
+                          onInput=${(e) => handleTextChange('artIconColor', e.target.value)}
+                        />
+                      </div>
                     </div>
                   `}
                 </div>

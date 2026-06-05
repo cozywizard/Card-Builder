@@ -10,8 +10,8 @@ import CardLibrary from './components/CardLibrary.js';
 import CardSheetBuilder from './components/CardSheetBuilder.js';
 
 // Import Database & Utilities
-import { getCards, saveCard, deleteCard } from './utils/db.js';
-import { packCards } from './utils/binPacker.js';
+import { getCards, saveCard, deleteCard, getSheets, saveSheets, clearSheets } from './utils/db.js';
+import { packCards, getNextAvailablePosition } from './utils/binPacker.js';
 import { exportSheetsToPDF } from './utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -27,9 +27,10 @@ const DEFAULT_CARD = {
   description: 'Launch a sphere of crackling flame. Deals 6 Magic Fire damage and inflicts a Burning status effect on all enemies in the target row.',
   bottomLeft: 'Cost: 2 Mana',
   bottomRight: 'Rare Item',
-  bgColor: '#1a0d1a',
-  textColor: '#fce7f3',
+  bgColor: '#ffffff',
+  textColor: '#1a1a1a',
   themeColor: '#f43f5e',
+  iconColor: '#f43f5e',
   cardArt: null,
   cardBackImage: null,
   titleFont: 'Outfit',
@@ -40,6 +41,7 @@ const DEFAULT_CARD = {
   artIconId: null,
   artIconSvgPath: null,
   artIconUpload: null,
+  artIconColor: '#f43f5e',
 
   // Modular ability section fields (for Large 3"x5" template size)
   ability1Points: '1 AP',
@@ -60,6 +62,8 @@ function App() {
   const [libraryCards, setLibraryCards] = useState([]);
   const [currentCard, setCurrentCard] = useState({ ...DEFAULT_CARD, id: `card-${Date.now()}` });
   const [sheetItems, setSheetItems] = useState([]); // Array of positioned instances: { id, card, sheetIndex, x, y, w, h }
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
+  const [sheetCount, setSheetCount] = useState(1);
 
   // Theme state — persisted in localStorage, default dark
   const [theme, setTheme] = useState(() => localStorage.getItem('cardforge-theme') || 'dark');
@@ -81,12 +85,45 @@ function App() {
       try {
         const saved = await getCards();
         setLibraryCards(saved);
+        
+        // Also load sheets
+        const savedSheets = await getSheets();
+        if (savedSheets && savedSheets.length > 0) {
+          const sheetData = savedSheets[0]; // Get the most recent sheet state
+          if (sheetData.items) {
+            setSheetItems(sheetData.items);
+          }
+          if (sheetData.pageCount && Number.isInteger(sheetData.pageCount) && sheetData.pageCount > 0) {
+            setSheetCount(sheetData.pageCount);
+          } else if (sheetData.items && sheetData.items.length > 0) {
+            const maxIndex = Math.max(0, ...sheetData.items.map(item => item.sheetIndex || 0));
+            setSheetCount(maxIndex + 1);
+          }
+          setActiveSheetIndex(0);
+        }
       } catch (err) {
         console.error('Failed to load card templates from database:', err);
       }
     }
     loadInitialData();
   }, []);
+
+  // Auto-save sheets whenever cards or page count change
+  useEffect(() => {
+    const saveTimeout = setTimeout(async () => {
+      try {
+        if (sheetItems.length > 0 || sheetCount > 1) {
+          await saveSheets({ items: sheetItems, pageCount: sheetCount });
+        } else {
+          await clearSheets();
+        }
+      } catch (err) {
+        console.error('Failed to auto-save sheet layouts:', err);
+      }
+    }, 500); // Debounce: save 500ms after last change
+
+    return () => clearTimeout(saveTimeout);
+  }, [sheetItems, sheetCount]);
 
   // Save Card to Library
   const handleSaveCard = async () => {
@@ -172,8 +209,7 @@ function App() {
 
   // Add card to sheet list
   const handleAddCardToSheet = (card) => {
-    const sizeInfo = card.size ? card.size : 'poker';
-    const cardSize = card.size === 'tarot' ? { w: 2.75, h: 4.75 } : 
+    const sizeInfo = card.size === 'tarot' ? { w: 2.75, h: 4.75 } : 
                      card.size === 'bridge' ? { w: 2.25, h: 3.5 } :
                      card.size === 'mini' ? { w: 1.75, h: 2.5 } :
                      card.size === 'square' ? { w: 2.5, h: 2.5 } :
@@ -181,14 +217,31 @@ function App() {
                      card.size === 'large' ? { w: 3.0, h: 5.0 } :
                      { w: 2.5, h: 3.5 }; // Poker size default
 
+    const currentPageItems = sheetItems.filter(item => item.sheetIndex === activeSheetIndex);
+    const nextPosition = getNextAvailablePosition(currentPageItems, sizeInfo.w, sizeInfo.h);
+
+    let targetIndex = activeSheetIndex;
+    let x = 0.25;
+    let y = 0.25;
+
+    if (nextPosition) {
+      x = nextPosition.x;
+      y = nextPosition.y;
+    } else {
+      // Current page is full; create a new page for the item.
+      targetIndex = sheetCount;
+      setSheetCount(sheetCount + 1);
+      setActiveSheetIndex(targetIndex);
+    }
+
     const newInstance = {
       id: `instance-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       card: card,
-      sheetIndex: 0, // default first page
-      x: 0.25, // default margins
-      y: 0.25,
-      w: cardSize.w,
-      h: cardSize.h
+      sheetIndex: targetIndex,
+      x,
+      y,
+      w: sizeInfo.w,
+      h: sizeInfo.h
     };
 
     setSheetItems(prev => [...prev, newInstance]);
@@ -204,14 +257,30 @@ function App() {
     }
   };
 
+  const buildSheetModels = () => {
+    const sheets = Array.from({ length: sheetCount }, (_, idx) => ({
+      id: `sheet-${idx + 1}`,
+      cards: []
+    }));
+
+    sheetItems.forEach(item => {
+      const index = Number.isInteger(item.sheetIndex) && item.sheetIndex >= 0 && item.sheetIndex < sheetCount
+        ? item.sheetIndex
+        : 0;
+      sheets[index].cards.push(item);
+    });
+
+    return sheets;
+  };
+
   // Export positioned sheet elements to PDF
   const handleExportPDF = async () => {
-    if (sheetItems.length === 0) return;
+    if (sheetItems.length === 0 && sheetCount === 1) return;
     
     setExportProgress(10);
     try {
-      // 1. Package the positioned cards into clean sheet models
-      const sheets = packCards(sheetItems);
+      // 1. Use existing sheet grouping to preserve page layouts
+      const sheets = buildSheetModels();
       
       // 2. Fire high-res PDF generation
       await exportSheetsToPDF(sheets, (progress) => {
@@ -325,6 +394,10 @@ function App() {
               sheetItems=${sheetItems} 
               setSheetItems=${setSheetItems} 
               onExportPDF=${handleExportPDF} 
+              activeSheetIndex=${activeSheetIndex}
+              setActiveSheetIndex=${setActiveSheetIndex}
+              sheetCount=${sheetCount}
+              setSheetCount=${setSheetCount}
             />
           </div>
         `}

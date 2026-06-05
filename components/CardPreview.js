@@ -100,6 +100,8 @@ export default function CardPreview({ card, forceSide = 'front' }) {
           --card-bg: ${card.bgColor || '#1e1e24'};
           --card-text: ${card.textColor || '#ffffff'};
           --card-theme: ${card.themeColor || '#6366f1'};
+          --card-icon-color: ${card.iconColor || card.themeColor || '#6366f1'};
+          --card-art-icon-color: ${card.artIconColor || card.themeColor || '#6366f1'};
           --title-font: ${card.titleFont || 'Outfit'};
           --body-font: ${card.bodyFont || 'Inter'};
         "

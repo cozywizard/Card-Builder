@@ -1,7 +1,8 @@
 // Local IndexedDB persistence for CardForge
 const DB_NAME = 'CardForgeDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'cards';
+const SHEETS_STORE_NAME = 'sheets';
 
 export function initDB() {
   return new Promise((resolve, reject) => {
@@ -20,6 +21,9 @@ export function initDB() {
       const db = event.target.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(SHEETS_STORE_NAME)) {
+        db.createObjectStore(SHEETS_STORE_NAME, { keyPath: 'id' });
       }
     };
   });
@@ -74,6 +78,68 @@ export async function deleteCard(id) {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.delete(id);
+
+    request.onsuccess = () => {
+      resolve();
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
+}
+
+// SHEET PERSISTENCE FUNCTIONS
+export async function getSheets() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SHEETS_STORE_NAME, 'readonly');
+    const store = transaction.objectStore(SHEETS_STORE_NAME);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const sheets = request.result || [];
+      sheets.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      resolve(sheets);
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
+}
+
+export async function saveSheets(sheetData) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SHEETS_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(SHEETS_STORE_NAME);
+    
+    const payload = {
+      id: 'current-sheets',
+      items: Array.isArray(sheetData) ? sheetData : (sheetData.items || []),
+      pageCount: sheetData.pageCount || 1,
+      updatedAt: Date.now()
+    };
+    
+    const request = store.put(payload);
+
+    request.onsuccess = () => {
+      resolve(payload);
+    };
+
+    request.onerror = () => {
+      reject(request.error);
+    };
+  });
+}
+
+export async function clearSheets() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(SHEETS_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(SHEETS_STORE_NAME);
+    const request = store.delete('current-sheets');
 
     request.onsuccess = () => {
       resolve();

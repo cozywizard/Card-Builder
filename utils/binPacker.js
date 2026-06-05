@@ -20,6 +20,68 @@ export const CARD_SIZES = {
   'large': { name: 'Large Size', width: 3.0, height: 5.0 }
 };
 
+export function getNextAvailablePosition(existingItems, itemWidth, itemHeight, pageWidth = SHEET_WIDTH, pageHeight = SHEET_HEIGHT, margin = MARGIN) {
+  const minX = margin;
+  const maxX = pageWidth - margin;
+  const maxY = pageHeight - margin - itemHeight;
+  const candidates = new Set([margin]);
+
+  existingItems.forEach(item => {
+    const top = item.y;
+    const bottom = item.y + item.h;
+    if (top >= margin && top <= maxY) candidates.add(top);
+    if (bottom >= margin && bottom <= maxY) candidates.add(bottom);
+  });
+
+  const sortedY = Array.from(candidates).sort((a, b) => a - b);
+
+  for (const y of sortedY) {
+    if (y > maxY) continue;
+
+    // Determine horizontal blockers for this Y range
+    const blockers = existingItems
+      .filter(item => !(item.y + item.h <= y || item.y >= y + itemHeight))
+      .map(item => [item.x, item.x + item.w])
+      .sort((a, b) => a[0] - b[0]);
+
+    const merged = [];
+    for (const interval of blockers) {
+      if (!merged.length) {
+        merged.push([...interval]);
+      } else {
+        const last = merged[merged.length - 1];
+        if (interval[0] <= last[1]) {
+          last[1] = Math.max(last[1], interval[1]);
+        } else {
+          merged.push([...interval]);
+        }
+      }
+    }
+
+    let nextX = minX;
+    if (merged.length === 0) {
+      if (nextX + itemWidth <= maxX) return { x: nextX, y };
+      continue;
+    }
+
+    if (merged[0][0] - nextX >= itemWidth) {
+      return { x: nextX, y };
+    }
+
+    for (let i = 0; i < merged.length; i++) {
+      nextX = merged[i][1];
+      if (nextX < minX) nextX = minX;
+      const gapEnd = (i === merged.length - 1) ? maxX : merged[i + 1][0];
+      if (nextX + itemWidth <= gapEnd && nextX + itemWidth <= maxX) {
+        return { x: nextX, y };
+      }
+      nextX = gapEnd;
+    }
+  }
+
+  return null;
+}
+
 
 /**
  * Packs a list of card items into one or more sheets.
