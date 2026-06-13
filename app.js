@@ -11,7 +11,7 @@ import CardSheetBuilder from './components/CardSheetBuilder.js';
 
 // Import Database & Utilities
 import { getCards, saveCard, deleteCard, getSheets, saveSheets, clearSheets } from './utils/db.js';
-import { packCards, getNextAvailablePosition } from './utils/binPacker.js';
+import { packCards, getNextAvailablePosition, CARD_SIZES, getSizeForType } from './utils/binPacker.js';
 import { exportSheetsToPDF } from './utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -19,6 +19,7 @@ const html = htm.bind(h);
 const DEFAULT_CARD = {
   title: 'Eldritch Flame',
   size: 'poker',
+  cardType: 'attack',
   iconType: 'vector',
   iconId: 'flame',
   iconSvgPath: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3.5z',
@@ -68,11 +69,29 @@ function App() {
   // Theme state — persisted in localStorage, default dark
   const [theme, setTheme] = useState(() => localStorage.getItem('cardforge-theme') || 'dark');
 
+  // Per-card-type defaults (e.g., default back image). Persisted in localStorage.
+  const [cardTypeDefaults, setCardTypeDefaults] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('cardforge-cardTypeDefaults') || '{}');
+    } catch (e) {
+      return {};
+    }
+  });
+
   // Sync theme attribute to <html> and persist
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('cardforge-theme', theme);
   }, [theme]);
+
+  // Persist card type defaults
+  useEffect(() => {
+    try {
+      localStorage.setItem('cardforge-cardTypeDefaults', JSON.stringify(cardTypeDefaults || {}));
+    } catch (e) {
+      console.warn('Failed to persist cardTypeDefaults', e);
+    }
+  }, [cardTypeDefaults]);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
   
@@ -84,7 +103,16 @@ function App() {
     async function loadInitialData() {
       try {
         const saved = await getCards();
-        setLibraryCards(saved);
+        // Normalize legacy cards that only store `size`
+        const normalized = saved.map(c => {
+          if (!c.cardType) {
+            // Simple fallback: large size -> class, otherwise attack
+            const inferred = (c.size === 'large') ? 'class' : 'attack';
+            return { ...c, cardType: inferred };
+          }
+          return c;
+        });
+        setLibraryCards(normalized);
         
         // Also load sheets
         const savedSheets = await getSheets();
@@ -209,16 +237,10 @@ function App() {
 
   // Add card to sheet list
   const handleAddCardToSheet = (card) => {
-    const sizeInfo = card.size === 'tarot' ? { w: 2.75, h: 4.75 } : 
-                     card.size === 'bridge' ? { w: 2.25, h: 3.5 } :
-                     card.size === 'mini' ? { w: 1.75, h: 2.5 } :
-                     card.size === 'square' ? { w: 2.5, h: 2.5 } :
-                     card.size === 'business' ? { w: 2.0, h: 3.5 } :
-                     card.size === 'large' ? { w: 3.0, h: 5.0 } :
-                     { w: 2.5, h: 3.5 }; // Poker size default
+    const sizeInfo = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
 
     const currentPageItems = sheetItems.filter(item => item.sheetIndex === activeSheetIndex);
-    const nextPosition = getNextAvailablePosition(currentPageItems, sizeInfo.w, sizeInfo.h);
+    const nextPosition = getNextAvailablePosition(currentPageItems, sizeInfo.width, sizeInfo.height);
 
     let targetIndex = activeSheetIndex;
     let x = 0.25;
@@ -240,8 +262,8 @@ function App() {
       sheetIndex: targetIndex,
       x,
       y,
-      w: sizeInfo.w,
-      h: sizeInfo.h
+      w: sizeInfo.width,
+      h: sizeInfo.height
     };
 
     setSheetItems(prev => [...prev, newInstance]);
@@ -255,6 +277,58 @@ function App() {
         colors: [card.themeColor || '#6366f1']
       });
     }
+  };
+
+  // Bulk import handler: accept an array of row objects and save them as cards
+  const handleBulkImport = async (rows) => {
+    if (!rows || !rows.length) return { imported: 0, errors: [] };
+    const results = [];
+    const errors = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      try {
+        // Minimal normalization: title and cardType required
+        const title = row.title || row.Title || `Imported Card ${Date.now()}-${i}`;
+        let cardType = (row.cardType || row.CardType || row.type || row.Type || '').toString().toLowerCase();
+        if (!cardType) {
+          // Try to map from size
+          const sizeVal = (row.size || row.Size || '').toString().toLowerCase();
+          cardType = (sizeVal === 'large' || sizeVal === 'class') ? 'class' : 'attack';
+        }
+
+        const cardObj = {
+          ...DEFAULT_CARD,
+          id: `card-${Date.now()}-${i}`,
+          title: title,
+          cardType: cardType,
+          size: row.size || (cardType === 'class' ? 'large' : 'poker'),
+          headline: row.headline || row.Headline || DEFAULT_CARD.headline,
+          description: row.description || row.Description || DEFAULT_CARD.description,
+          bottomLeft: row.bottomLeft || row.BottomLeft || '',
+          bottomRight: row.bottomRight || row.BottomRight || '',
+          bgColor: row.bgColor || DEFAULT_CARD.bgColor,
+          textColor: row.textColor || DEFAULT_CARD.textColor,
+          themeColor: row.themeColor || DEFAULT_CARD.themeColor,
+          iconType: row.iconType || DEFAULT_CARD.iconType,
+          iconId: row.iconId || row.icon || DEFAULT_CARD.iconId,
+          iconUpload: row.iconUpload || null,
+          cardArt: row.cardArt || null,
+          cardBackImage: row.cardBackImage || null,
+        };
+
+        const saved = await saveCard(cardObj);
+        results.push(saved);
+      } catch (err) {
+        errors.push({ row: i, error: err.message || String(err) });
+      }
+    }
+
+    if (results.length > 0) {
+      setLibraryCards(prev => [...results.reverse(), ...prev]);
+    }
+
+    return { imported: results.length, errors };
   };
 
   const buildSheetModels = () => {
@@ -354,7 +428,7 @@ function App() {
                 <span class="preview-hint">Move mouse over card for glowing 3D perspective</span>
               </div>
               
-              <${CardPreview} card=${currentCard} />
+              <${CardPreview} card=${currentCard} cardTypeDefaults=${cardTypeDefaults} />
             </div>
           </div>
         `}
@@ -375,6 +449,9 @@ function App() {
               onDuplicateCard=${handleDuplicateCard} 
               onDeleteCard=${handleDeleteCard} 
               onAddCardToSheet=${handleAddCardToSheet} 
+              onBulkImport=${handleBulkImport}
+              cardTypeDefaults=${cardTypeDefaults}
+              setCardTypeDefaults=${setCardTypeDefaults}
             />
           </div>
         `}

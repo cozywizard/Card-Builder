@@ -1,12 +1,12 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { CARD_SIZES } from '../utils/binPacker.js';
+import { CARD_SIZES, getSizeForType } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
 
-export default function CardPreview({ card, forceSide = 'front' }) {
+export default function CardPreview({ card, forceSide = 'front', cardTypeDefaults = {} }) {
   const [side, setSide] = useState('front');
   const cardRef = useRef(null);
   
@@ -59,8 +59,8 @@ export default function CardPreview({ card, forceSide = 'front' }) {
     setSide(side === 'front' ? 'back' : 'front');
   };
 
-  // Dimensions based on card size selection
-  const sizeInfo = CARD_SIZES[card.size] || CARD_SIZES['poker'];
+// Dimensions based on card type selection or legacy size
+   const sizeInfo = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
   
   // Font auto-scaling based on text lengths (Standard sizes only)
   const titleText = card.title || 'Untitled Card';
@@ -225,16 +225,22 @@ export default function CardPreview({ card, forceSide = 'front' }) {
         <!-- BACK SIDE -->
         <div class="card-face card-back">
           <!-- Background image or premium diamond lattice -->
-          ${card.cardBackImage ? html`
-            <img src=${card.cardBackImage} class="card-back-background" alt="Card Back" />
-            <div class="card-inner-trim"></div>
-          ` : html`
-            <div class="card-inner-trim"></div>
-            <div class="card-back-geometric-mesh"></div>
-            <div class="card-back-medallion">
-              <div class="card-back-inner-diamond"></div>
-            </div>
-          `}
+          ${(() => {
+            const backImage = card.cardBackImage || (cardTypeDefaults && cardTypeDefaults[card.cardType]) || null;
+            if (backImage) {
+              return html`
+                <img src=${backImage} class="card-back-background" alt="Card Back" />
+                <div class="card-inner-trim"></div>
+              `;
+            }
+            return html`
+              <div class="card-inner-trim"></div>
+              <div class="card-back-geometric-mesh"></div>
+              <div class="card-back-medallion">
+                <div class="card-back-inner-diamond"></div>
+              </div>
+            `;
+          })()}
         </div>
       </div>
     </div>

@@ -20,6 +20,20 @@ export const CARD_SIZES = {
   'large': { name: 'Large Size', width: 3.0, height: 5.0 }
 };
 
+// Logical card types used in the app. These map to physical sizes above.
+export const CARD_TYPES = {
+  'attack': { name: 'Attack', sizeKey: 'poker' },
+  'modifier': { name: 'Modifier', sizeKey: 'poker' },
+  'class': { name: 'Class', sizeKey: 'large' }
+};
+
+export function getSizeForType(cardType) {
+  if (!cardType) return CARD_SIZES['poker'];
+  const type = CARD_TYPES[cardType.toLowerCase()];
+  if (!type) return CARD_SIZES['poker'];
+  return CARD_SIZES[type.sizeKey] || CARD_SIZES['poker'];
+}
+
 export function getNextAvailablePosition(existingItems, itemWidth, itemHeight, pageWidth = SHEET_WIDTH, pageHeight = SHEET_HEIGHT, margin = MARGIN) {
   const minX = margin;
   const maxX = pageWidth - margin;
@@ -96,7 +110,7 @@ export function packCards(items) {
 
   // Clone items to avoid mutating inputs and resolve their dimensions
   const cardsToPack = items.map(item => {
-    const sizeInfo = CARD_SIZES[item.card.size] || CARD_SIZES['poker'];
+    const sizeInfo = item.card.cardType ? getSizeForType(item.card.cardType) : (CARD_SIZES[item.card.size] || CARD_SIZES['poker']);
     return {
       id: item.id,
       card: item.card,

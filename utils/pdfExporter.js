@@ -4,7 +4,8 @@
  * Uses jsPDF for rendering and a 300 DPI HTML Canvas for high fidelity.
  */
 
-import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT } from './binPacker.js';
+import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType } from './binPacker.js';
+import { loadGoogleFont } from '../components/CardCreator.js';
 
 // DPI resolution for printing
 const DPI = 300;
@@ -24,22 +25,10 @@ function loadImage(src) {
   });
 }
 
-/**
- * Ensures Google Font is loaded inside browser session before rendering to Canvas
- */
 async function ensureFontLoaded(fontName) {
+  loadGoogleFont(fontName);
   if (!fontName) return;
-  const id = `gfont-${fontName.replace(/\s+/g, '-').toLowerCase()}`;
-  if (!document.getElementById(id)) {
-    const link = document.createElement('link');
-    link.id = id;
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g, '+')}:wght@400;500;700;800&display=swap`;
-    document.head.appendChild(link);
-  }
-  
   try {
-    // Wait for the font face to be loaded
     await document.fonts.load(`1em "${fontName}"`);
   } catch (e) {
     console.warn(`Font loading timed out or failed for: ${fontName}`, e);
@@ -90,7 +79,7 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
  * Draws a card onto a high-DPI canvas
  */
 export async function renderCardToCanvas(card, canvas, side = 'front') {
-  const size = CARD_SIZES[card.size] || CARD_SIZES['poker'];
+  const size = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
   const w = size.width * INCH_TO_PX;
   const h = size.height * INCH_TO_PX;
 
@@ -101,9 +90,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front') {
   // Clear canvas
   ctx.clearRect(0, 0, w, h);
 
-  // Load selected fonts dynamically before drawing
-  await ensureFontLoaded(card.titleFont || 'Outfit');
-  await ensureFontLoaded(card.bodyFont || 'Inter');
+  await Promise.all([
+    ensureFontLoaded(card.titleFont || 'Outfit'),
+    ensureFontLoaded(card.bodyFont || 'Inter')
+  ]);
 
   if (side === 'front') {
     // 1. Draw Card Background
@@ -558,10 +548,6 @@ export async function exportSheetsToPDF(sheets, onProgress = () => {}) {
 
     // --- PAGE A: FRONT SHEET ---
     for (const item of sheet.cards) {
-      // Explicitly load fonts before rendering
-      await ensureFontLoaded(item.card.titleFont || 'Outfit');
-      await ensureFontLoaded(item.card.bodyFont || 'Inter');
-      
       await renderCardToCanvas(item.card, tempCanvas, 'front');
       const imgData = tempCanvas.toDataURL('image/png');
       doc.addImage(imgData, 'PNG', item.x, item.y, item.w, item.h);

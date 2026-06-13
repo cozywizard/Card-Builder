@@ -4,11 +4,15 @@ const DB_VERSION = 2;
 const STORE_NAME = 'cards';
 const SHEETS_STORE_NAME = 'sheets';
 
+let _dbPromise = null;
+
 export function initDB() {
-  return new Promise((resolve, reject) => {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = (event) => {
+      _dbPromise = null; // allow retry on error
       console.error('Database failed to open:', event.target.error);
       reject(event.target.error);
     };
@@ -27,6 +31,7 @@ export function initDB() {
       }
     };
   });
+  return _dbPromise;
 }
 
 export async function getCards() {
@@ -95,12 +100,10 @@ export async function getSheets() {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(SHEETS_STORE_NAME, 'readonly');
     const store = transaction.objectStore(SHEETS_STORE_NAME);
-    const request = store.getAll();
+    const request = store.get('current-sheets');
 
     request.onsuccess = () => {
-      const sheets = request.result || [];
-      sheets.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      resolve(sheets);
+      resolve(request.result ? [request.result] : []);
     };
 
     request.onerror = () => {

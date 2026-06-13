@@ -1,13 +1,23 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { CARD_SIZES } from '../utils/binPacker.js';
+import { CARD_SIZES, CARD_TYPES } from '../utils/binPacker.js';
+import { fetchCsv } from '../utils/googleSheets.js';
 
 const html = htm.bind(h);
 
-export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDeleteCard, onAddCardToSheet }) {
+export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDeleteCard, onAddCardToSheet, onBulkImport, cardTypeDefaults, setCardTypeDefaults }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sizeFilter, setSizeFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importCsvUrl, setImportCsvUrl] = useState('');
+  const [importPreviewRows, setImportPreviewRows] = useState([]);
+  const [importAllRows, setImportAllRows] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [showDefaultsEditor, setShowDefaultsEditor] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importSuccess, setImportSuccess] = useState('');
+  const [fetchingPreview, setFetchingPreview] = useState(false);
 
   const filteredCards = cards.filter(card => {
     const matchesSearch = 
@@ -15,7 +25,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
       (card.description && card.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (card.headline && card.headline.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesSize = sizeFilter === 'all' || card.size === sizeFilter;
+    const matchesSize = typeFilter === 'all' || (card.cardType === typeFilter) || (card.size === typeFilter);
     
     return matchesSearch && matchesSize;
   });
@@ -39,19 +49,24 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
 
         <div class="size-filter-tabs">
           <button
-            class="filter-tab ${sizeFilter === 'all' ? 'active' : ''}"
-            onClick=${() => setSizeFilter('all')}
+            class="filter-tab ${typeFilter === 'all' ? 'active' : ''}"
+            onClick=${() => setTypeFilter('all')}
           >
-            All Sizes
+            All Types
           </button>
-          ${Object.entries(CARD_SIZES).map(([key, val]) => html`
+          ${Object.entries(CARD_TYPES).map(([key, val]) => html`
             <button
-              class="filter-tab ${sizeFilter === key ? 'active' : ''}"
-              onClick=${() => setSizeFilter(key)}
+              class="filter-tab ${typeFilter === key ? 'active' : ''}"
+              onClick=${() => setTypeFilter(key)}
             >
               ${val.name}
             </button>
           `)}
+
+          <div style="margin-left:12px; display:inline-flex; gap:8px;">
+            <button class="lib-action-btn secondary-btn" onClick=${() => setShowImportModal(true)}>Import</button>
+            <button class="lib-action-btn secondary-btn" onClick=${() => setShowDefaultsEditor(true)}>Type Defaults</button>
+          </div>
         </div>
       </div>
 
@@ -72,7 +87,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
                 >
                   <div class="library-card-title-group">
                     <span class="lib-card-title" style="color: ${card.textColor || '#ffffff'}">${card.title}</span>
-                    <span class="lib-card-size">${sizeInfo.name} • ${sizeInfo.width}"x${sizeInfo.height}"</span>
+                    <span class="lib-card-size">${(CARD_TYPES[card.cardType] && CARD_TYPES[card.cardType].name) || sizeInfo.name} • ${sizeInfo.width}"x${sizeInfo.height}"</span>
                   </div>
                   <div class="lib-card-icon-indicator" style="color: ${card.themeColor || '#6366f1'}">
                     ${card.iconType === 'upload' && card.iconUpload ? html`
@@ -162,6 +177,104 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
           </svg>
           <h3>Your Library is Empty</h3>
           <p>You haven't saved any custom card templates yet. Create your first epic game card in the "Card Creator" to get started!</p>
+        </div>
+      `}
+
+      ${showImportModal && html`
+        <div class="modal-overlay z-index-top">
+          <div class="modal-content glass-panel import-modal" style="max-width:600px;">
+            <h3>Import Cards from Google Sheets</h3>
+            ${!importPreviewRows.length && !importSuccess && html`
+              <div>
+                <p>Export your Google Sheet as CSV and paste the export URL below.</p>
+                <p style="font-size:0.85rem; color:#999; margin-top:8px;">Expected columns: title, cardtype, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid, cardart, cardbackimage, ability1title, ability1points, ability1desc, ability2title, ability2points, ability2desc, ultimatetitle, ultimatepoints, ultimatedesc</p>
+                <input type="text" class="form-text-input" placeholder="https://docs.google.com/spreadsheets/d/{ID}/export?format=csv&gid={GID}" value=${importCsvUrl} onInput=${(e) => { setImportCsvUrl(e.target.value); setImportError(''); }} style="margin-top:8px;" />
+                ${importError && html`<div style="color:#f43f5e; font-size:0.85rem; margin-top:4px;">${importError}</div>`}
+                <div style="margin-top:12px; display:flex; gap:8px;">
+                  <button class="lib-action-btn primary-glow-btn" onClick=${async () => {
+                    if (!importCsvUrl.trim()) { setImportError('Please enter a CSV export URL'); return; }
+                    setFetchingPreview(true);
+                    setImportError('');
+                    try {
+                      const rows = await fetchCsv(importCsvUrl.trim());
+                      if (rows.length === 0) { setImportError('CSV is empty'); setFetchingPreview(false); return; }
+                      const norm = rows.map(r => { const out = {}; Object.keys(r).forEach(k => out[k.toLowerCase().trim()] = r[k]); return out; });
+                      setImportAllRows(norm);
+                      setImportPreviewRows(norm.slice(0, 6));
+                    } catch (err) {
+                      setImportError('Failed to fetch CSV: ' + (err.message || err));
+                    } finally { setFetchingPreview(false); }
+                  }} disabled=${fetchingPreview}>${fetchingPreview ? 'Fetching...' : 'Fetch Preview'}</button>
+                  <button class="lib-action-btn secondary-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); }}>Close</button>
+                </div>
+              </div>
+            `}
+
+            ${importSuccess && html`
+              <div style="background:rgba(16,185,129,0.1); border:1px solid #10b981; border-radius:4px; padding:12px; margin-bottom:12px;">
+                <p style="color:#10b981; font-weight:500;">${importSuccess}</p>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="lib-action-btn primary-glow-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportPreviewRows([]); }}>Done</button>
+              </div>
+            `}
+
+            ${importPreviewRows.length > 0 && !importSuccess && html`
+              <div style="margin-top:12px;">
+                <h4 style="margin-bottom:8px;">Preview (${importPreviewRows.length} rows)</h4>
+                <div style="border:1px solid rgba(255,255,255,0.1); border-radius:4px; overflow:auto; max-height:240px;">
+                  <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                    <thead style="position:sticky; top:0; background:rgba(255,255,255,0.05);">
+                      <tr>
+                        ${Object.keys(importPreviewRows[0]).map(h => html`<th style="padding:6px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.1);">${h}</th>`)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${importPreviewRows.map((row, idx) => html`<tr style="${idx % 2 === 0 ? 'background:rgba(255,255,255,0.02);' : ''}">${Object.keys(row).map(k => html`<td style="padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;">${row[k] || '(empty)'}</td>`)}</tr>`)}
+                    </tbody>
+                  </table>
+                </div>
+                <div style="margin-top:12px; display:flex; gap:8px;">
+                  <button class="lib-action-btn primary-glow-btn" onClick=${async () => {
+                    if (!onBulkImport) { setImportError('Bulk import handler not available'); return; }
+                    setImporting(true);
+                    setImportError('');
+                    try {
+                      const res = await onBulkImport(importAllRows);
+                      setImportSuccess(`Successfully imported ${res.imported} card${res.imported !== 1 ? 's' : ''}${res.errors.length > 0 ? '. ' + res.errors.length + ' rows had errors.' : ''}`);
+                      setImportPreviewRows([]);
+                      setImportAllRows([]);
+                    } catch (err) {
+                      setImportError('Import failed: ' + (err.message || err));
+                    } finally { setImporting(false); }
+                  }} disabled=${importing}>${importing ? 'Importing...' : 'Import All'}</button>
+                  <button class="lib-action-btn secondary-btn" onClick=${() => { setImportPreviewRows([]); setImportAllRows([]); setImportError(''); }}>Back</button>
+                </div>
+              </div>
+            `}
+          </div>
+        </div>
+      `}
+
+      ${showDefaultsEditor && html`
+        <div class="modal-overlay z-index-top">
+          <div class="modal-content glass-panel import-modal">
+            <h3>Card Type Defaults</h3>
+            <p>Set a default back image URL for each card type. Cards without an explicit back will use these.</p>
+            ${Object.entries(CARD_TYPES).map(([key, val]) => html`
+              <div style="margin-bottom:8px;">
+                <label class="input-label">${val.name} Back Image URL</label>
+                <input type="text" class="form-text-input" value=${(cardTypeDefaults && cardTypeDefaults[key]) || ''} onInput=${(e) => {
+                  const v = e.target.value;
+                  setCardTypeDefaults(prev => ({ ...(prev||{}), [key]: v }));
+                }} />
+              </div>
+            `)}
+            <div style="margin-top:8px; display:flex; gap:8px;">
+              <button class="lib-action-btn primary-glow-btn" onClick=${() => setShowDefaultsEditor(false)}>Save</button>
+              <button class="lib-action-btn secondary-btn" onClick=${() => setShowDefaultsEditor(false)}>Close</button>
+            </div>
+          </div>
         </div>
       `}
     </div>

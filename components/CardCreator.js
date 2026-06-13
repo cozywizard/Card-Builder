@@ -2,7 +2,7 @@ import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import IconPicker from './IconPicker.js';
-import { CARD_SIZES } from '../utils/binPacker.js';
+import { CARD_SIZES, CARD_TYPES, getSizeForType } from '../utils/binPacker.js';
 
 const html = htm.bind(h);
 
@@ -85,6 +85,11 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
   }, [card.titleFont, card.bodyFont]);
 
   const handleTextChange = (field, value) => {
+    if (field === 'cardType') {
+      const sizeKey = CARD_TYPES[value] ? CARD_TYPES[value].sizeKey : card.size;
+      onChangeCard({ ...card, cardType: value, size: sizeKey });
+      return;
+    }
     onChangeCard({ ...card, [field]: value });
   };
 
@@ -147,17 +152,18 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
           <div class="form-section">
             <h3 class="section-title">Dimensions & Theme</h3>
             
-            <!-- Card Size -->
+            <!-- Card Type -->
             <div class="form-group">
-              <label class="input-label">Card Size Standard</label>
+              <label class="input-label">Card Type</label>
               <select 
                 class="form-select" 
-                value=${card.size || 'poker'}
-                onChange=${(e) => handleTextChange('size', e.target.value)}
+                value=${card.cardType || 'attack'}
+                onChange=${(e) => handleTextChange('cardType', e.target.value)}
               >
-                ${Object.entries(CARD_SIZES).map(([key, val]) => html`
-                  <option value=${key}>${val.name} (${val.width}" × ${val.height}")</option>
-                `)}
+                ${Object.entries(CARD_TYPES).map(([key, val]) => {
+                  const sz = getSizeForType(key);
+                  return html`<option value=${key}>${val.name} (${sz.width}" × ${sz.height}")</option>`;
+                })}
               </select>
             </div>
 
