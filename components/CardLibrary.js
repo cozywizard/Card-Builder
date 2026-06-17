@@ -6,13 +6,13 @@ import { fetchCsv } from '../utils/googleSheets.js';
 
 const html = htm.bind(h);
 
-export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDeleteCard, onAddCardToSheet, onBulkImport, cardTypeDefaults, setCardTypeDefaults }) {
+export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDeleteCard, onAddCardToSheet, onBulkImport, onGoToSheetBuilder, cardTypeDefaults, setCardTypeDefaults }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [showImportModal, setShowImportModal] = useState(false);
   const [importCsvUrl, setImportCsvUrl] = useState('');
-  const [importPreviewRows, setImportPreviewRows] = useState([]);
   const [importAllRows, setImportAllRows] = useState([]);
+  const [importQuantities, setImportQuantities] = useState({});
   const [importing, setImporting] = useState(false);
   const [showDefaultsEditor, setShowDefaultsEditor] = useState(false);
   const [importError, setImportError] = useState('');
@@ -184,7 +184,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
         <div class="modal-overlay z-index-top">
           <div class="modal-content glass-panel import-modal" style="max-width:600px;">
             <h3>Import Cards from Google Sheets</h3>
-            ${!importPreviewRows.length && !importSuccess && html`
+            ${!importAllRows.length && !importSuccess && html`
               <div>
                 <p>Export your Google Sheet as CSV and paste the export URL below.</p>
                 <p style="font-size:0.85rem; color:#999; margin-top:8px;">Expected columns: title, cardtype, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid, cardart, cardbackimage, ability1title, ability1points, ability1desc, ability2title, ability2points, ability2desc, ultimatetitle, ultimatepoints, ultimatedesc</p>
@@ -200,7 +200,9 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
                       if (rows.length === 0) { setImportError('CSV is empty'); setFetchingPreview(false); return; }
                       const norm = rows.map(r => { const out = {}; Object.keys(r).forEach(k => out[k.toLowerCase().trim()] = r[k]); return out; });
                       setImportAllRows(norm);
-                      setImportPreviewRows(norm.slice(0, 6));
+                      const initQty = {};
+                      norm.forEach((_, i) => { initQty[i] = 1; });
+                      setImportQuantities(initQty);
                     } catch (err) {
                       setImportError('Failed to fetch CSV: ' + (err.message || err));
                     } finally { setFetchingPreview(false); }
@@ -215,40 +217,67 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
                 <p style="color:#10b981; font-weight:500;">${importSuccess}</p>
               </div>
               <div style="display:flex; gap:8px;">
-                <button class="lib-action-btn primary-glow-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportPreviewRows([]); }}>Done</button>
+                ${onGoToSheetBuilder && html`
+                  <button class="lib-action-btn primary-glow-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportAllRows([]); setImportQuantities({}); onGoToSheetBuilder(); }}>View Sheets</button>
+                `}
+                <button class="lib-action-btn secondary-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportAllRows([]); setImportQuantities({}); }}>Done</button>
               </div>
             `}
 
-            ${importPreviewRows.length > 0 && !importSuccess && html`
+            ${importAllRows.length > 0 && !importSuccess && html`
               <div style="margin-top:12px;">
-                <h4 style="margin-bottom:8px;">Preview (${importPreviewRows.length} rows)</h4>
-                <div style="border:1px solid rgba(255,255,255,0.1); border-radius:4px; overflow:auto; max-height:240px;">
+                <h4 style="margin-bottom:8px;">Configure Import (${importAllRows.length} card${importAllRows.length !== 1 ? 's' : ''})</h4>
+                <p style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:8px;">Set the <strong>Qty</strong> column to control how many copies of each card are placed on the print sheets. Set to 0 to import to library only.</p>
+                <div style="border:1px solid rgba(255,255,255,0.1); border-radius:4px; overflow:auto; max-height:280px;">
                   <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
-                    <thead style="position:sticky; top:0; background:rgba(255,255,255,0.05);">
+                    <thead style="position:sticky; top:0; background:rgba(15,18,37,0.95); z-index:1;">
                       <tr>
-                        ${Object.keys(importPreviewRows[0]).map(h => html`<th style="padding:6px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.1);">${h}</th>`)}
+                        <th style="padding:6px 8px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.1); color:var(--accent-primary); white-space:nowrap; min-width:60px;">Qty</th>
+                        ${Object.keys(importAllRows[0]).map(col => html`<th style="padding:6px 8px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.1); white-space:nowrap;">${col}</th>`)}
                       </tr>
                     </thead>
                     <tbody>
-                      ${importPreviewRows.map((row, idx) => html`<tr style="${idx % 2 === 0 ? 'background:rgba(255,255,255,0.02);' : ''}">${Object.keys(row).map(k => html`<td style="padding:6px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;">${row[k] || '(empty)'}</td>`)}</tr>`)}
+                      ${importAllRows.map((row, idx) => html`
+                        <tr style="${idx % 2 === 0 ? 'background:rgba(255,255,255,0.02);' : ''}">
+                          <td style="padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.05); text-align:center;">
+                            <input
+                              type="number"
+                              min="0"
+                              max="99"
+                              value=${importQuantities[idx] ?? 1}
+                              onInput=${(e) => {
+                                const val = Math.max(0, parseInt(e.target.value) || 0);
+                                setImportQuantities(prev => ({ ...prev, [idx]: val }));
+                              }}
+                              style="width:52px; padding:2px 4px; background:rgba(99,102,241,0.1); border:1px solid var(--border-color); border-radius:4px; color:var(--text-primary); text-align:center; font-size:0.85rem;"
+                            />
+                          </td>
+                          ${Object.keys(row).map(k => html`<td style="padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.05); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px;">${row[k] || '(empty)'}</td>`)}
+                        </tr>
+                      `)}
                     </tbody>
                   </table>
                 </div>
-                <div style="margin-top:12px; display:flex; gap:8px;">
+                <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
                   <button class="lib-action-btn primary-glow-btn" onClick=${async () => {
                     if (!onBulkImport) { setImportError('Bulk import handler not available'); return; }
                     setImporting(true);
                     setImportError('');
                     try {
-                      const res = await onBulkImport(importAllRows);
-                      setImportSuccess(`Successfully imported ${res.imported} card${res.imported !== 1 ? 's' : ''}${res.errors.length > 0 ? '. ' + res.errors.length + ' rows had errors.' : ''}`);
-                      setImportPreviewRows([]);
+                      const quantities = importAllRows.map((_, i) => Number(importQuantities[i] ?? 1));
+                      const res = await onBulkImport(importAllRows, quantities);
+                      const sheetMsg = res.sheetsCreated > 0 ? ` Placed on ${res.sheetsCreated} sheet${res.sheetsCreated !== 1 ? 's' : ''}.` : '';
+                      setImportSuccess(`Successfully imported ${res.imported} card${res.imported !== 1 ? 's' : ''}${sheetMsg}${res.errors.length > 0 ? ' (' + res.errors.length + ' rows had errors).' : ''}`);
                       setImportAllRows([]);
+                      setImportQuantities({});
                     } catch (err) {
                       setImportError('Import failed: ' + (err.message || err));
                     } finally { setImporting(false); }
                   }} disabled=${importing}>${importing ? 'Importing...' : 'Import All'}</button>
-                  <button class="lib-action-btn secondary-btn" onClick=${() => { setImportPreviewRows([]); setImportAllRows([]); setImportError(''); }}>Back</button>
+                  <button class="lib-action-btn secondary-btn" onClick=${() => { setImportAllRows([]); setImportQuantities({}); setImportError(''); }}>Back</button>
+                  <span style="font-size:0.8rem; color:var(--text-muted); margin-left:4px;">
+                    Total copies: ${importAllRows.reduce((sum, _, i) => sum + (Number(importQuantities[i] ?? 1)), 0)}
+                  </span>
                 </div>
               </div>
             `}

@@ -279,20 +279,18 @@ function App() {
     }
   };
 
-  // Bulk import handler: accept an array of row objects and save them as cards
-  const handleBulkImport = async (rows) => {
-    if (!rows || !rows.length) return { imported: 0, errors: [] };
+  // Bulk import handler: accept rows and per-row quantities, save cards to library, place copies on sheets
+  const handleBulkImport = async (rows, quantities = []) => {
+    if (!rows || !rows.length) return { imported: 0, errors: [], sheetsCreated: 0 };
     const results = [];
     const errors = [];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
-        // Minimal normalization: title and cardType required
         const title = row.title || row.Title || `Imported Card ${Date.now()}-${i}`;
         let cardType = (row.cardType || row.CardType || row.type || row.Type || '').toString().toLowerCase();
         if (!cardType) {
-          // Try to map from size
           const sizeVal = (row.size || row.Size || '').toString().toLowerCase();
           cardType = (sizeVal === 'large' || sizeVal === 'class') ? 'class' : 'attack';
         }
@@ -325,10 +323,62 @@ function App() {
     }
 
     if (results.length > 0) {
-      setLibraryCards(prev => [...results.reverse(), ...prev]);
+      setLibraryCards(prev => [...results.slice().reverse(), ...prev]);
     }
 
-    return { imported: results.length, errors };
+    // Place copies on sheets according to quantities
+    const totalCopies = quantities.reduce((sum, q) => sum + (Number(q) || 0), 0);
+    let sheetsCreated = 0;
+
+    if (totalCopies > 0 && results.length > 0) {
+      // Build sheet items iteratively so each placement sees prior items
+      let currentItems = [...sheetItems];
+      let currentCount = sheetCount;
+      // Start placing on the last existing sheet (or sheet 0)
+      let placeOnIndex = currentItems.length > 0
+        ? Math.max(...currentItems.map(item => item.sheetIndex))
+        : 0;
+      const origSheetCount = currentCount;
+
+      for (let i = 0; i < results.length; i++) {
+        const card = results[i];
+        const qty = Math.max(0, Math.floor(Number(quantities[i]) || 0));
+        const sizeInfo = getSizeForType(card.cardType);
+
+        for (let q = 0; q < qty; q++) {
+          const pageItems = currentItems.filter(item => item.sheetIndex === placeOnIndex);
+          const pos = getNextAvailablePosition(pageItems, sizeInfo.width, sizeInfo.height);
+
+          let x, y, targetIndex;
+          if (pos) {
+            x = pos.x; y = pos.y; targetIndex = placeOnIndex;
+          } else {
+            // Current sheet is full — start a new one
+            currentCount++;
+            placeOnIndex = currentCount - 1;
+            targetIndex = placeOnIndex;
+            const newPos = getNextAvailablePosition([], sizeInfo.width, sizeInfo.height);
+            x = newPos.x; y = newPos.y;
+          }
+
+          currentItems.push({
+            id: `instance-${Date.now()}-${i}-${q}-${Math.random().toString(36).substr(2, 5)}`,
+            card,
+            sheetIndex: targetIndex,
+            x, y,
+            w: sizeInfo.width,
+            h: sizeInfo.height
+          });
+        }
+      }
+
+      sheetsCreated = currentCount - origSheetCount;
+      setSheetItems(currentItems);
+      setSheetCount(currentCount);
+      setActiveSheetIndex(placeOnIndex);
+    }
+
+    return { imported: results.length, errors, sheetsCreated };
   };
 
   const buildSheetModels = () => {
@@ -443,13 +493,14 @@ function App() {
               </div>
             </div>
             
-            <${CardLibrary} 
-              cards=${libraryCards} 
-              onEditCard=${handleEditCard} 
-              onDuplicateCard=${handleDuplicateCard} 
-              onDeleteCard=${handleDeleteCard} 
-              onAddCardToSheet=${handleAddCardToSheet} 
+            <${CardLibrary}
+              cards=${libraryCards}
+              onEditCard=${handleEditCard}
+              onDuplicateCard=${handleDuplicateCard}
+              onDeleteCard=${handleDeleteCard}
+              onAddCardToSheet=${handleAddCardToSheet}
               onBulkImport=${handleBulkImport}
+              onGoToSheetBuilder=${() => setActiveTab('sheet-builder')}
               cardTypeDefaults=${cardTypeDefaults}
               setCardTypeDefaults=${setCardTypeDefaults}
             />
