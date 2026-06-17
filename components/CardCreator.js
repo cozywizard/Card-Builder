@@ -671,7 +671,7 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
               <p class="input-hint-text">Leave blank to use the gorgeous default neon-diamond pattern back side.</p>
             </div>
           </div>
-        `}}
+        `}
       </div>
 
       <!-- Action Panel -->
