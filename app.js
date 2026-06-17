@@ -1,5 +1,5 @@
 import { h, render } from 'https://esm.sh/preact@10.19.6';
-import { useState, useEffect, useRef } from 'https://esm.sh/preact@10.19.6/hooks';
+import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 
 // Import Custom components
