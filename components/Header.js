@@ -3,7 +3,7 @@ import htm from 'https://esm.sh/htm@3.1.1';
 
 const html = htm.bind(h);
 
-export default function Header({ activeTab, setActiveTab, libraryCount, theme, onToggleTheme }) {
+export default function Header({ activeTab, setActiveTab, libraryCount, theme, onToggleTheme, currentUser, onShowAuth, onSignOut }) {
   const isDark = theme === 'dark';
 
   return html`
@@ -58,7 +58,7 @@ export default function Header({ activeTab, setActiveTab, libraryCount, theme, o
         </button>
       </nav>
       
-      <!-- Right side: status + theme toggle -->
+      <!-- Right side: status + theme toggle + auth -->
       <div class="system-status-indicator">
         <span class="pulse-glowing-dot"></span>
         <span class="status-lbl">Print Engine Active</span>
@@ -78,6 +78,30 @@ export default function Header({ activeTab, setActiveTab, libraryCount, theme, o
           </span>
           <span class="theme-toggle-thumb"></span>
         </button>
+
+        <!-- Auth controls -->
+        <div class="header-auth-divider"></div>
+        ${currentUser ? html`
+          <div class="header-user-area">
+            <span class="header-user-email" title=${currentUser.email}>${currentUser.email}</span>
+            <button class="header-auth-btn header-signout-btn" onClick=${onSignOut} title="Sign out">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Sign Out
+            </button>
+          </div>
+        ` : html`
+          <button class="header-auth-btn header-signin-btn" onClick=${onShowAuth}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            Sign In
+          </button>
+        `}
       </div>
     </header>
   `;

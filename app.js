@@ -1,5 +1,5 @@
 import { h, render } from 'https://esm.sh/preact@10.19.6';
-import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
+import { useState, useEffect, useRef } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 
 // Import Custom components
@@ -8,9 +8,13 @@ import CardCreator from './components/CardCreator.js';
 import CardPreview from './components/CardPreview.js';
 import CardLibrary from './components/CardLibrary.js';
 import CardSheetBuilder from './components/CardSheetBuilder.js';
+import AuthModal from './components/AuthModal.js';
 
 // Import Database & Utilities
-import { getCards, saveCard, deleteCard, getSheets, saveSheets, clearSheets } from './utils/db.js';
+import * as localDB from './utils/db.js';
+import * as cloudDB from './utils/firestoreDB.js';
+import { auth, isFirebaseConfigured } from './utils/firebase.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { packCards, getNextAvailablePosition, CARD_SIZES, getSizeForType } from './utils/binPacker.js';
 import { exportSheetsToPDF } from './utils/pdfExporter.js';
 
@@ -66,6 +70,13 @@ function App() {
   const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const [sheetCount, setSheetCount] = useState(1);
 
+  // Auth state
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [migrationPending, setMigrationPending] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // Theme state — persisted in localStorage, default dark
   const [theme, setTheme] = useState(() => localStorage.getItem('cardforge-theme') || 'dark');
 
@@ -98,60 +109,122 @@ function App() {
   // PDF Export loading state
   const [exportProgress, setExportProgress] = useState(null); // null or percentage (0-100)
 
-  // Load cards from DB on mount
+  // Normalize legacy cards that only store `size` (no `cardType`)
+  function normalizeCards(cards) {
+    return cards.map(c => {
+      if (!c.cardType) {
+        return { ...c, cardType: c.size === 'large' ? 'class' : 'attack' };
+      }
+      return c;
+    });
+  }
+
+  function applySheetState(sheetData, cardsById) {
+    if (!sheetData || !sheetData.items) return;
+    // Cloud sheets use compact format { id, cardId, ... }; local sheets have full card objects
+    const items = sheetData.items.map(item => {
+      if (item.card) return item; // local format — already has card
+      const card = cardsById ? cardsById[item.cardId] : null;
+      return card ? { ...item, card } : null;
+    }).filter(Boolean);
+    setSheetItems(items);
+    if (sheetData.pageCount && Number.isInteger(sheetData.pageCount) && sheetData.pageCount > 0) {
+      setSheetCount(sheetData.pageCount);
+    } else if (items.length > 0) {
+      setSheetCount(Math.max(0, ...items.map(i => i.sheetIndex || 0)) + 1);
+    }
+    setActiveSheetIndex(0);
+  }
+
+  // Load data on mount and whenever auth state changes
   useEffect(() => {
-    async function loadInitialData() {
+    if (!isFirebaseConfigured) {
+      // Firebase not set up yet — always use local storage
+      localDB.getCards().then(saved => {
+        setLibraryCards(normalizeCards(saved));
+        return localDB.getSheets();
+      }).then(savedSheets => {
+        if (savedSheets?.length > 0) applySheetState(savedSheets[0], null);
+        setAuthReady(true);
+      }).catch(err => {
+        console.error('Failed to load local data:', err);
+        setAuthReady(true);
+      });
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+
       try {
-        const saved = await getCards();
-        // Normalize legacy cards that only store `size`
-        const normalized = saved.map(c => {
-          if (!c.cardType) {
-            // Simple fallback: large size -> class, otherwise attack
-            const inferred = (c.size === 'large') ? 'class' : 'attack';
-            return { ...c, cardType: inferred };
+        if (user) {
+          // Logged in — load from Firestore
+          const cloudCards = await cloudDB.getCards(user.uid);
+          const normalized = normalizeCards(cloudCards);
+          setLibraryCards(normalized);
+
+          const cardsById = Object.fromEntries(normalized.map(c => [c.id, c]));
+          const savedSheets = await cloudDB.getSheets(user.uid);
+          if (savedSheets?.length > 0) {
+            applySheetState(savedSheets[0], cardsById);
+          } else {
+            // No cloud data yet — offer to migrate local cards
+            const localCards = await localDB.getCards();
+            if (localCards.length > 0) setMigrationPending(true);
           }
-          return c;
-        });
-        setLibraryCards(normalized);
-        
-        // Also load sheets
-        const savedSheets = await getSheets();
-        if (savedSheets && savedSheets.length > 0) {
-          const sheetData = savedSheets[0]; // Get the most recent sheet state
-          if (sheetData.items) {
-            setSheetItems(sheetData.items);
-          }
-          if (sheetData.pageCount && Number.isInteger(sheetData.pageCount) && sheetData.pageCount > 0) {
-            setSheetCount(sheetData.pageCount);
-          } else if (sheetData.items && sheetData.items.length > 0) {
-            const maxIndex = Math.max(0, ...sheetData.items.map(item => item.sheetIndex || 0));
-            setSheetCount(maxIndex + 1);
-          }
-          setActiveSheetIndex(0);
+        } else {
+          // Not logged in — load from IndexedDB
+          const saved = await localDB.getCards();
+          setLibraryCards(normalizeCards(saved));
+          const savedSheets = await localDB.getSheets();
+          if (savedSheets?.length > 0) applySheetState(savedSheets[0], null);
         }
       } catch (err) {
-        console.error('Failed to load card templates from database:', err);
+        console.error('Failed to load data:', err);
+      } finally {
+        setAuthReady(true);
       }
-    }
-    loadInitialData();
+    });
+
+    return unsubscribe;
   }, []);
 
-  // Auto-save sheets whenever cards or page count change
+  // Auto-save sheets whenever items or page count change
   useEffect(() => {
+    if (!authReady) return;
+
     const saveTimeout = setTimeout(async () => {
       try {
         if (sheetItems.length > 0 || sheetCount > 1) {
-          await saveSheets({ items: sheetItems, pageCount: sheetCount });
+          if (currentUser && isFirebaseConfigured) {
+            // Compact format for Firestore — strip full card objects, store only cardId
+            const compactItems = sheetItems.map(item => ({
+              id: item.id,
+              cardId: item.card?.id || item.cardId,
+              sheetIndex: item.sheetIndex,
+              x: item.x,
+              y: item.y,
+              w: item.w,
+              h: item.h
+            }));
+            await cloudDB.saveSheets(currentUser.uid, { items: compactItems, pageCount: sheetCount });
+          } else {
+            await localDB.saveSheets({ items: sheetItems, pageCount: sheetCount });
+          }
         } else {
-          await clearSheets();
+          if (currentUser && isFirebaseConfigured) {
+            await cloudDB.clearSheets(currentUser.uid);
+          } else {
+            await localDB.clearSheets();
+          }
         }
       } catch (err) {
         console.error('Failed to auto-save sheet layouts:', err);
       }
-    }, 500); // Debounce: save 500ms after last change
+    }, 500);
 
     return () => clearTimeout(saveTimeout);
-  }, [sheetItems, sheetCount]);
+  }, [sheetItems, sheetCount, currentUser, authReady]);
 
   // Save Card to Library
   const handleSaveCard = async () => {
@@ -160,10 +233,14 @@ function App() {
         ...currentCard,
         id: currentCard.id || `card-${Date.now()}`
       };
-      
-      const saved = await saveCard(cardToSave);
-      
-      // Update state
+
+      let saved;
+      if (currentUser && isFirebaseConfigured) {
+        saved = await cloudDB.saveCard(currentUser.uid, cardToSave);
+      } else {
+        saved = await localDB.saveCard(cardToSave);
+      }
+
       setLibraryCards(prev => {
         const idx = prev.findIndex(c => c.id === saved.id);
         if (idx >= 0) {
@@ -174,10 +251,9 @@ function App() {
         return [saved, ...prev];
       });
 
-      // Update current card id if newly created
+      // Keep local image data in editor (Firestore version may have Storage URLs)
       setCurrentCard(cardToSave);
 
-      // Fire victory confetti micro-delight
       if (window.confetti) {
         window.confetti({
           particleCount: 80,
@@ -186,7 +262,6 @@ function App() {
           colors: [cardToSave.themeColor || '#6366f1', '#a855f7', '#3b82f6']
         });
       }
-
     } catch (err) {
       console.error('Failed to save card template:', err);
       alert('Error saving card to database.');
@@ -207,7 +282,12 @@ function App() {
         id: `card-${Date.now()}`,
         title: `${card.title} (Copy)`
       };
-      const saved = await saveCard(newCard);
+      let saved;
+      if (currentUser && isFirebaseConfigured) {
+        saved = await cloudDB.saveCard(currentUser.uid, newCard);
+      } else {
+        saved = await localDB.saveCard(newCard);
+      }
       setLibraryCards(prev => [saved, ...prev]);
 
       if (window.confetti) {
@@ -225,13 +305,64 @@ function App() {
   // Delete Card
   const handleDeleteCard = async (cardId) => {
     try {
-      await deleteCard(cardId);
+      if (currentUser && isFirebaseConfigured) {
+        await cloudDB.deleteCard(currentUser.uid, cardId);
+      } else {
+        await localDB.deleteCard(cardId);
+      }
       setLibraryCards(prev => prev.filter(c => c.id !== cardId));
-      
-      // Clean up any positioned instances from print layouts
       setSheetItems(prev => prev.filter(item => item.card.id !== cardId));
     } catch (err) {
       console.error('Failed to delete card:', err);
+    }
+  };
+
+  // Sign out
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setMigrationPending(false);
+      // onAuthStateChanged will fire with null and reload local data
+    } catch (err) {
+      console.error('Sign out failed:', err);
+    }
+  };
+
+  // Migrate local IndexedDB cards up to the user's Firestore account
+  const handleMigrateLocalData = async () => {
+    if (!currentUser || !isFirebaseConfigured) return;
+    setIsSyncing(true);
+    try {
+      const localCards = await localDB.getCards();
+      for (const card of localCards) {
+        await cloudDB.saveCard(currentUser.uid, card);
+      }
+      const localSheets = await localDB.getSheets();
+      if (localSheets?.length > 0 && localSheets[0].items) {
+        const compactItems = localSheets[0].items.map(item => ({
+          id: item.id,
+          cardId: item.card?.id || item.cardId,
+          sheetIndex: item.sheetIndex,
+          x: item.x,
+          y: item.y,
+          w: item.w,
+          h: item.h
+        }));
+        await cloudDB.saveSheets(currentUser.uid, { items: compactItems, pageCount: localSheets[0].pageCount || 1 });
+      }
+      // Reload from cloud so UI reflects synced state
+      const cloudCards = await cloudDB.getCards(currentUser.uid);
+      const normalized = normalizeCards(cloudCards);
+      setLibraryCards(normalized);
+      const cardsById = Object.fromEntries(normalized.map(c => [c.id, c]));
+      const savedSheets = await cloudDB.getSheets(currentUser.uid);
+      if (savedSheets?.length > 0) applySheetState(savedSheets[0], cardsById);
+      setMigrationPending(false);
+    } catch (err) {
+      console.error('Migration failed:', err);
+      alert('Sync failed. Please try again.');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -315,7 +446,9 @@ function App() {
           cardBackImage: row.cardBackImage || null,
         };
 
-        const saved = await saveCard(cardObj);
+        const saved = currentUser && isFirebaseConfigured
+          ? await cloudDB.saveCard(currentUser.uid, cardObj)
+          : await localDB.saveCard(cardObj);
         results.push(saved);
       } catch (err) {
         errors.push({ row: i, error: err.message || String(err) });
@@ -442,12 +575,15 @@ function App() {
   return html`
     <div class="app-container">
       <!-- HEADER COMPONENT -->
-      <${Header} 
-        activeTab=${activeTab} 
-        setActiveTab=${setActiveTab} 
+      <${Header}
+        activeTab=${activeTab}
+        setActiveTab=${setActiveTab}
         libraryCount=${libraryCards.length}
         theme=${theme}
         onToggleTheme=${toggleTheme}
+        currentUser=${currentUser}
+        onShowAuth=${() => setShowAuthModal(true)}
+        onSignOut=${handleSignOut}
       />
 
       <main class="app-main-content">
@@ -531,6 +667,25 @@ function App() {
         `}
 
       </main>
+
+      <!-- AUTH MODAL -->
+      ${showAuthModal && html`<${AuthModal} onClose=${() => setShowAuthModal(false)} />`}
+
+      <!-- LOCAL DATA MIGRATION PROMPT -->
+      ${migrationPending && html`
+        <div class="modal-overlay z-index-top">
+          <div class="modal-content glass-panel animate-zoom-in migration-modal">
+            <h3>Sync your local cards?</h3>
+            <p>You have cards saved in this browser that aren't in your cloud account yet. Would you like to sync them?</p>
+            <div class="migration-actions">
+              <button class="primary-glow-btn" onClick=${handleMigrateLocalData} disabled=${isSyncing}>
+                ${isSyncing ? 'Syncing...' : 'Yes, sync my cards'}
+              </button>
+              <button class="secondary-btn" onClick=${() => setMigrationPending(false)}>Skip</button>
+            </div>
+          </div>
+        </div>
+      `}
 
       <!-- PDF GENERATION EXPORT LOADING MODAL -->
       ${exportProgress !== null && html`
