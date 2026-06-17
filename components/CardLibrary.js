@@ -2,7 +2,7 @@ import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import { CARD_SIZES, CARD_TYPES } from '../utils/binPacker.js';
-import { fetchCsv } from '../utils/googleSheets.js';
+import { fetchCsv, parseCsvToRows } from '../utils/googleSheets.js';
 
 const html = htm.bind(h);
 
@@ -10,6 +10,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importTab, setImportTab] = useState('file'); // 'file' | 'url'
   const [importCsvUrl, setImportCsvUrl] = useState('');
   const [importAllRows, setImportAllRows] = useState([]);
   const [importQuantities, setImportQuantities] = useState({});
@@ -182,32 +183,98 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
 
       ${showImportModal && html`
         <div class="modal-overlay z-index-top">
-          <div class="modal-content glass-panel import-modal" style="max-width:600px;">
-            <h3>Import Cards from Google Sheets</h3>
+          <div class="modal-content glass-panel import-modal" style="max-width:620px;">
+            <h3>Import Cards from CSV</h3>
             ${!importAllRows.length && !importSuccess && html`
               <div>
-                <p>Export your Google Sheet as CSV and paste the export URL below.</p>
-                <p style="font-size:0.85rem; color:#999; margin-top:8px;">Expected columns: title, cardtype, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid, cardart, cardbackimage, ability1title, ability1points, ability1desc, ability2title, ability2points, ability2desc, ultimatetitle, ultimatepoints, ultimatedesc</p>
-                <input type="text" class="form-text-input" placeholder="https://docs.google.com/spreadsheets/d/{ID}/export?format=csv&gid={GID}" value=${importCsvUrl} onInput=${(e) => { setImportCsvUrl(e.target.value); setImportError(''); }} style="margin-top:8px;" />
-                ${importError && html`<div style="color:#f43f5e; font-size:0.85rem; margin-top:4px;">${importError}</div>`}
-                <div style="margin-top:12px; display:flex; gap:8px;">
-                  <button class="lib-action-btn primary-glow-btn" onClick=${async () => {
-                    if (!importCsvUrl.trim()) { setImportError('Please enter a CSV export URL'); return; }
-                    setFetchingPreview(true);
-                    setImportError('');
-                    try {
-                      const rows = await fetchCsv(importCsvUrl.trim());
-                      if (rows.length === 0) { setImportError('CSV is empty'); setFetchingPreview(false); return; }
-                      const norm = rows.map(r => { const out = {}; Object.keys(r).forEach(k => out[k.toLowerCase().trim()] = r[k]); return out; });
-                      setImportAllRows(norm);
-                      const initQty = {};
-                      norm.forEach((_, i) => { initQty[i] = 1; });
-                      setImportQuantities(initQty);
-                    } catch (err) {
-                      setImportError('Failed to fetch CSV: ' + (err.message || err));
-                    } finally { setFetchingPreview(false); }
-                  }} disabled=${fetchingPreview}>${fetchingPreview ? 'Fetching...' : 'Fetch Preview'}</button>
-                  <button class="lib-action-btn secondary-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); }}>Close</button>
+                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">Expected columns: <code style="font-size:0.8rem; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:3px;">title, cardtype, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid</code></p>
+
+                <!-- Tab switcher -->
+                <div style="display:flex; gap:0; border:1px solid var(--border-color); border-radius:6px; overflow:hidden; margin-bottom:14px; width:fit-content;">
+                  <button
+                    style="padding:6px 16px; font-size:0.85rem; border:none; cursor:pointer; transition:var(--transition-fast); background:${importTab === 'file' ? 'var(--accent-primary)' : 'transparent'}; color:${importTab === 'file' ? '#fff' : 'var(--text-secondary)'};"
+                    onClick=${() => { setImportTab('file'); setImportError(''); }}
+                  >Upload File</button>
+                  <button
+                    style="padding:6px 16px; font-size:0.85rem; border:none; cursor:pointer; transition:var(--transition-fast); background:${importTab === 'url' ? 'var(--accent-primary)' : 'transparent'}; color:${importTab === 'url' ? '#fff' : 'var(--text-secondary)'};"
+                    onClick=${() => { setImportTab('url'); setImportError(''); }}
+                  >URL</button>
+                </div>
+
+                ${importTab === 'file' && html`
+                  <div>
+                    <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:10px;">
+                      In Google Sheets: <strong>File → Download → Comma Separated Values (.csv)</strong>, then select the file below.
+                    </p>
+                    <label style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:2px dashed var(--border-glow); border-radius:8px; padding:28px 16px; cursor:pointer; transition:var(--transition-fast); background:rgba(99,102,241,0.04);"
+                      onDragOver=${(e) => e.preventDefault()}
+                      onDrop=${async (e) => {
+                        e.preventDefault();
+                        setImportError('');
+                        const file = e.dataTransfer.files[0];
+                        if (!file) return;
+                        if (!file.name.endsWith('.csv') && file.type !== 'text/csv') { setImportError('Please drop a .csv file'); return; }
+                        const text = await file.text();
+                        const norm = parseCsvToRows(text).map(r => { const out = {}; Object.keys(r).forEach(k => out[k.toLowerCase().trim()] = r[k]); return out; });
+                        if (!norm.length) { setImportError('CSV file is empty'); return; }
+                        setImportAllRows(norm);
+                        const initQty = {};
+                        norm.forEach((_, i) => { initQty[i] = 1; });
+                        setImportQuantities(initQty);
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--accent-primary);">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      <span style="font-size:0.9rem; color:var(--text-primary);">Drop CSV here or click to browse</span>
+                      <input type="file" accept=".csv,text/csv" style="position:absolute; opacity:0; pointer-events:none;" onChange=${async (e) => {
+                        setImportError('');
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const text = await file.text();
+                        const norm = parseCsvToRows(text).map(r => { const out = {}; Object.keys(r).forEach(k => out[k.toLowerCase().trim()] = r[k]); return out; });
+                        if (!norm.length) { setImportError('CSV file is empty'); return; }
+                        setImportAllRows(norm);
+                        const initQty = {};
+                        norm.forEach((_, i) => { initQty[i] = 1; });
+                        setImportQuantities(initQty);
+                        e.target.value = '';
+                      }} />
+                    </label>
+                  </div>
+                `}
+
+                ${importTab === 'url' && html`
+                  <div>
+                    <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:8px;">
+                      The sheet must be set to <strong>"Anyone with the link can view"</strong>. Use the export URL format below.
+                    </p>
+                    <input type="text" class="form-text-input" placeholder="https://docs.google.com/spreadsheets/d/{ID}/export?format=csv&gid={GID}" value=${importCsvUrl} onInput=${(e) => { setImportCsvUrl(e.target.value); setImportError(''); }} />
+                  </div>
+                `}
+
+                ${importError && html`<div style="color:#f43f5e; font-size:0.85rem; margin-top:8px;">${importError}</div>`}
+
+                <div style="margin-top:14px; display:flex; gap:8px;">
+                  ${importTab === 'url' && html`
+                    <button class="lib-action-btn primary-glow-btn" onClick=${async () => {
+                      if (!importCsvUrl.trim()) { setImportError('Please enter a CSV export URL'); return; }
+                      setFetchingPreview(true);
+                      setImportError('');
+                      try {
+                        const rows = await fetchCsv(importCsvUrl.trim());
+                        if (rows.length === 0) { setImportError('CSV is empty'); setFetchingPreview(false); return; }
+                        const norm = rows.map(r => { const out = {}; Object.keys(r).forEach(k => out[k.toLowerCase().trim()] = r[k]); return out; });
+                        setImportAllRows(norm);
+                        const initQty = {};
+                        norm.forEach((_, i) => { initQty[i] = 1; });
+                        setImportQuantities(initQty);
+                      } catch (err) {
+                        setImportError('Failed to fetch CSV: ' + (err.message || err));
+                      } finally { setFetchingPreview(false); }
+                    }} disabled=${fetchingPreview}>${fetchingPreview ? 'Fetching...' : 'Fetch & Preview'}</button>
+                  `}
+                  <button class="lib-action-btn secondary-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportTab('file'); }}>Close</button>
                 </div>
               </div>
             `}
@@ -218,9 +285,9 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
               </div>
               <div style="display:flex; gap:8px;">
                 ${onGoToSheetBuilder && html`
-                  <button class="lib-action-btn primary-glow-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportAllRows([]); setImportQuantities({}); onGoToSheetBuilder(); }}>View Sheets</button>
+                  <button class="lib-action-btn primary-glow-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportAllRows([]); setImportQuantities({}); setImportTab('file'); onGoToSheetBuilder(); }}>View Sheets</button>
                 `}
-                <button class="lib-action-btn secondary-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportAllRows([]); setImportQuantities({}); }}>Done</button>
+                <button class="lib-action-btn secondary-btn" onClick=${() => { setShowImportModal(false); setImportError(''); setImportSuccess(''); setImportAllRows([]); setImportQuantities({}); setImportTab('file'); }}>Done</button>
               </div>
             `}
 

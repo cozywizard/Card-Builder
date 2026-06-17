@@ -1,29 +1,22 @@
-import { firestoreDb, storage } from './firebase.js';
+import { firestoreDb } from './firebase.js';
 import {
   collection, doc, getDocs, setDoc, deleteDoc, query, orderBy, getDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-import {
-  ref, uploadString, getDownloadURL, deleteObject
-} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
-// Fields that may contain base64 data URLs — these get uploaded to Firebase Storage
+// Uploaded image fields store base64 data URLs which can be large.
+// Firestore has a 1MB document limit, so we strip them before saving.
+// Images remain in the local in-memory state and display correctly in the
+// current session, but do not sync across devices.
 const IMAGE_FIELDS = ['cardArt', 'cardBackImage', 'iconUpload', 'artIconUpload'];
 
-async function uploadImage(userId, cardId, field, dataUrl) {
-  const imgRef = ref(storage, `users/${userId}/images/${cardId}/${field}`);
-  await uploadString(imgRef, dataUrl, 'data_url');
-  return await getDownloadURL(imgRef);
-}
-
-async function processCardImages(userId, card) {
-  const processed = { ...card };
-  await Promise.all(IMAGE_FIELDS.map(async (field) => {
-    const value = processed[field];
-    if (value && typeof value === 'string' && value.startsWith('data:')) {
-      processed[field] = await uploadImage(userId, card.id, field, value);
+function stripDataUrls(card) {
+  const stripped = { ...card };
+  for (const field of IMAGE_FIELDS) {
+    if (stripped[field] && typeof stripped[field] === 'string' && stripped[field].startsWith('data:')) {
+      stripped[field] = null;
     }
-  }));
-  return processed;
+  }
+  return stripped;
 }
 
 export async function getCards(userId) {
@@ -36,20 +29,14 @@ export async function getCards(userId) {
 }
 
 export async function saveCard(userId, card) {
-  const cardToSave = { ...card, updatedAt: Date.now() };
-  const processed = await processCardImages(userId, cardToSave);
-  await setDoc(doc(firestoreDb, 'users', userId, 'cards', card.id), processed);
-  return processed;
+  const cardToSave = { ...stripDataUrls(card), updatedAt: Date.now() };
+  await setDoc(doc(firestoreDb, 'users', userId, 'cards', card.id), cardToSave);
+  // Return the original card (with images) so the UI stays intact
+  return { ...card, updatedAt: cardToSave.updatedAt };
 }
 
 export async function deleteCard(userId, cardId) {
   await deleteDoc(doc(firestoreDb, 'users', userId, 'cards', cardId));
-  // Best-effort cleanup of any uploaded images
-  await Promise.all(IMAGE_FIELDS.map(async (field) => {
-    try {
-      await deleteObject(ref(storage, `users/${userId}/images/${cardId}/${field}`));
-    } catch (_) {}
-  }));
 }
 
 // Sheet items are stored in compact form: { id, cardId, sheetIndex, x, y, w, h }
