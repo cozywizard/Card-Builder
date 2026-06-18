@@ -187,7 +187,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
             <h3>Import Cards from CSV</h3>
             ${!importAllRows.length && !importSuccess && html`
               <div>
-                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">Expected columns: <code style="font-size:0.8rem; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:3px;">title, cardtype, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid</code></p>
+                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">Expected columns: <code style="font-size:0.8rem; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:3px;">title, cardtype, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid, cardart, cardbackimage</code></p>
 
                 <!-- Tab switcher -->
                 <div style="display:flex; gap:0; border:1px solid var(--border-color); border-radius:6px; overflow:hidden; margin-bottom:14px; width:fit-content;">

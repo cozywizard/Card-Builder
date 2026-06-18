@@ -439,11 +439,11 @@ function App() {
           bgColor: row.bgColor || DEFAULT_CARD.bgColor,
           textColor: row.textColor || DEFAULT_CARD.textColor,
           themeColor: row.themeColor || DEFAULT_CARD.themeColor,
-          iconType: row.iconType || DEFAULT_CARD.iconType,
-          iconId: row.iconId || row.icon || DEFAULT_CARD.iconId,
-          iconUpload: row.iconUpload || null,
-          cardArt: row.cardArt || null,
-          cardBackImage: row.cardBackImage || null,
+          iconType: row.iconType || row.icontype || DEFAULT_CARD.iconType,
+          iconId: row.iconId || row.iconid || row.icon || DEFAULT_CARD.iconId,
+          iconUpload: row.iconUpload || row.iconupload || null,
+          cardArt: row.cardArt || row.cardart || null,
+          cardBackImage: row.cardBackImage || row.cardbackimage || null,
         };
 
         const saved = currentUser && isFirebaseConfigured
