@@ -275,26 +275,24 @@ export async function renderCardToCanvas(card, canvas, side = 'front') {
         const artImg = await loadImage(card.cardArt);
         if (artImg) {
           ctx.save();
-          ctx.beginPath();
-          ctx.rect(artMargin, artMargin, w - (artMargin * 2), artHeight);
-          ctx.clip();
-          
+
+          const frameW = w - (artMargin * 2);
           const imgRatio = artImg.width / artImg.height;
-          const targetRatio = (w - (artMargin * 2)) / artHeight;
+          const frameRatio = frameW / artHeight;
           let dw, dh, dx, dy;
-          
-          if (imgRatio > targetRatio) {
+
+          if (imgRatio > frameRatio) {
+            dw = frameW;
+            dh = frameW / imgRatio;
+            dx = artMargin;
+            dy = artMargin + (artHeight - dh) / 2;
+          } else {
             dh = artHeight;
             dw = artHeight * imgRatio;
-            dx = artMargin - (dw - (w - (artMargin * 2))) / 2;
+            dx = artMargin + (frameW - dw) / 2;
             dy = artMargin;
-          } else {
-            dw = w - (artMargin * 2);
-            dh = dw / imgRatio;
-            dx = artMargin;
-            dy = artMargin - (dh - artHeight) / 2;
           }
-          
+
           ctx.drawImage(artImg, dx, dy, dw, dh);
           ctx.restore();
           
