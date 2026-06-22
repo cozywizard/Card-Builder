@@ -251,6 +251,11 @@ function App() {
         return [saved, ...prev];
       });
 
+      // Sync updated card to all sheet instances that reference it
+      setSheetItems(prev => prev.map(item =>
+        item.card?.id === saved.id ? { ...item, card: saved } : item
+      ));
+
       // Keep local image data in editor (Firestore version may have Storage URLs)
       setCurrentCard(cardToSave);
 
