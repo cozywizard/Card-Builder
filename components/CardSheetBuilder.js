@@ -205,6 +205,25 @@ export default function CardSheetBuilder({
     }
   };
 
+  // Refresh the active page only: pull the latest saved version of each
+  // card from the library into every instance placed on this sheet.
+  const handleRefreshSheet = () => {
+    const libraryById = Object.fromEntries(libraryCards.map(c => [c.id, c]));
+    let updatedCount = 0;
+
+    setSheetItems(prev => prev.map(item => {
+      if (item.sheetIndex !== activeSheetIndex) return item;
+      const latest = libraryById[item.card?.id];
+      if (!latest || latest === item.card) return item;
+      updatedCount++;
+      return { ...item, card: latest };
+    }));
+
+    if (updatedCount === 0) {
+      alert('This page is already up to date with the card library.');
+    }
+  };
+
   const handleAddPage = () => {
     const nextIndex = sheetCount;
     setSheetCount(sheetCount + 1);
@@ -254,6 +273,13 @@ export default function CardSheetBuilder({
               <path d="M12 5v14M5 12h14" />
             </svg>
             New Page
+          </button>
+
+          <button class="secondary-btn" onClick=${handleRefreshSheet} disabled=${activeSheetItems.length === 0} title="Update every card on this page with its latest saved version from the library">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Refresh Page
           </button>
 
           <button class="secondary-btn delete-btn-secondary" onClick=${handleDeletePage} disabled=${sheetCount <= 1} title="Delete the current sheet page">
