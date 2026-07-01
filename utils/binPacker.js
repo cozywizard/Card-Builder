@@ -209,5 +209,28 @@ export function packCards(items) {
     });
   }
 
+  // Redistribute x positions within each shelf row (space-between justification)
+  for (const sheet of sheets) {
+    const rows = new Map();
+    for (const card of sheet.cards) {
+      const key = card.y;
+      if (!rows.has(key)) rows.set(key, []);
+      rows.get(key).push(card);
+    }
+
+    for (const rowCards of rows.values()) {
+      rowCards.sort((a, b) => a.x - b.x);
+      const totalCardWidth = rowCards.reduce((sum, c) => sum + c.w, 0);
+      const gap = rowCards.length > 1
+        ? (MAX_WIDTH - totalCardWidth) / (rowCards.length - 1)
+        : 0;
+      let currentX = MARGIN;
+      for (const card of rowCards) {
+        card.x = currentX;
+        currentX += card.w + gap;
+      }
+    }
+  }
+
   return sheets;
 }
