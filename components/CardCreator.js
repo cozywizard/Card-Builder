@@ -415,15 +415,22 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
               <div class="form-group">
                 <label class="input-label">Card Graphic Icon</label>
                 <div class="icon-toggle-row">
-                  <button 
-                    type="button" 
-                    class="toggle-choice-btn ${card.iconType !== 'upload' ? 'active' : ''}"
+                  <button
+                    type="button"
+                    class="toggle-choice-btn ${card.iconType === 'none' ? 'active' : ''}"
+                    onClick=${() => handleTextChange('iconType', 'none')}
+                  >
+                    None
+                  </button>
+                  <button
+                    type="button"
+                    class="toggle-choice-btn ${card.iconType === 'vector' ? 'active' : ''}"
                     onClick=${() => handleTextChange('iconType', 'vector')}
                   >
                     Vector Icon
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     class="toggle-choice-btn ${card.iconType === 'upload' ? 'active' : ''}"
                     onClick=${() => handleTextChange('iconType', 'upload')}
                   >
@@ -431,7 +438,7 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                   </button>
                 </div>
 
-                ${card.iconType === 'upload' ? html`
+                ${card.iconType !== 'none' && (card.iconType === 'upload' ? html`
                   <div class="upload-area margin-top-sm">
                     <input 
                       type="file" 
@@ -464,7 +471,7 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                     </svg>
                     ${card.iconId ? `Vector Selected: ${card.iconId.toUpperCase()}` : 'Browse Vector Icons Library'}
                   </button>
-                `}
+                `)}
 
                 <!-- Icon Color Picker (appears after icon selection) -->
                 ${(card.iconUpload || card.iconId) && html`

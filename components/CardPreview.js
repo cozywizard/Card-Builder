@@ -129,7 +129,7 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
             </div>
 
             <!-- Card Header Icon (Standard Sizes Only) -->
-            ${card.size !== 'large' && html`
+            ${card.size !== 'large' && card.iconType !== 'none' && html`
               <div class="card-icon-container">
                 ${card.iconType === 'upload' && card.iconUpload ? html`
                   <img src=${card.iconUpload} class="card-custom-icon" alt="icon" />
