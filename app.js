@@ -40,6 +40,7 @@ const DEFAULT_CARD = {
   cardBackImage: null,
   titleFont: 'Outfit',
   bodyFont: 'Inter',
+  descFontSize: 'auto',
 
   // Art overlay icon details
   artIconType: 'none', 

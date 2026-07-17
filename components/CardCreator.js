@@ -497,14 +497,34 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
 
               <!-- Card Description -->
               <div class="form-group">
-                <label class="input-label">Description Text (Auto-scales font size)</label>
-                <textarea 
-                  class="form-textarea-input" 
+                <label class="input-label">Description Text</label>
+                <textarea
+                  class="form-textarea-input"
                   rows="4"
                   placeholder="Deal 5 Fire damage to all targets in selected row. Costs 3 Mana energy."
                   value=${card.description || ''}
                   onInput=${(e) => handleTextChange('description', e.target.value)}
                 ></textarea>
+              </div>
+
+              <!-- Description Font Size -->
+              <div class="form-group">
+                <label class="input-label">Description Font Size</label>
+                <div class="icon-toggle-row">
+                  ${[
+                    { value: 'auto', label: 'Auto' },
+                    { value: 'sm',   label: 'S' },
+                    { value: 'md',   label: 'M' },
+                    { value: 'lg',   label: 'L' },
+                    { value: 'xl',   label: 'XL' },
+                  ].map(({ value, label }) => html`
+                    <button
+                      type="button"
+                      class="toggle-choice-btn ${(card.descFontSize || 'auto') === value ? 'active' : ''}"
+                      onClick=${() => handleTextChange('descFontSize', value)}
+                    >${label}</button>
+                  `)}
+                </div>
               </div>
 
               <!-- Callouts -->

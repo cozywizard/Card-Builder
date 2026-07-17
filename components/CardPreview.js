@@ -73,6 +73,8 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
 
   const descText = card.description || '';
   const getDescFontSize = () => {
+    const sizeMap = { sm: '0.72rem', md: '0.85rem', lg: '1rem', xl: '1.15rem' };
+    if (card.descFontSize && card.descFontSize !== 'auto') return sizeMap[card.descFontSize] || '0.85rem';
     const len = descText.length;
     if (len > 250) return '0.62rem';
     if (len > 180) return '0.7rem';
