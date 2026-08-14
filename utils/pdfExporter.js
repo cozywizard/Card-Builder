@@ -435,31 +435,37 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         ctx.restore();
       }
 
-      // Draw Main Header Icon (top-right next to title)
-      const iconSize = 0.45 * INCH_TO_PX;
-      const iconX = w - textMargin - iconSize;
-      const iconY = titleY;
+      // Draw Main Header Icon (top-right next to title). Gated on iconType
+      // !== 'none' -- matching the live preview, which never even renders
+      // `.card-icon-container` in that case. `iconSvgPath` stays populated
+      // in the card data after switching to "none" (it's just not meant to
+      // be drawn), so it can't be used alone to decide whether to draw.
+      if (card.iconType !== 'none') {
+        const iconSize = 0.45 * INCH_TO_PX;
+        const iconX = w - textMargin - iconSize;
+        const iconY = titleY;
 
-      if (card.iconType === 'upload' && card.iconUpload) {
-        const iconImg = await loadImage(card.iconUpload);
-        if (iconImg) {
-          ctx.drawImage(iconImg, iconX, iconY, iconSize, iconSize);
+        if (card.iconType === 'upload' && card.iconUpload) {
+          const iconImg = await loadImage(card.iconUpload);
+          if (iconImg) {
+            ctx.drawImage(iconImg, iconX, iconY, iconSize, iconSize);
+          }
+        } else if (card.iconSvgPath) {
+          ctx.save();
+          ctx.translate(iconX, iconY);
+          ctx.scale(iconSize / 24, iconSize / 24);
+
+          // Matches `.card-icon-container`'s `color: var(--card-icon-color)`
+          // in the live preview, which falls back to the theme color.
+          ctx.strokeStyle = card.iconColor || card.themeColor || '#6366f1';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          const path = new Path2D(card.iconSvgPath);
+          ctx.stroke(path);
+          ctx.restore();
         }
-      } else if (card.iconSvgPath) {
-        ctx.save();
-        ctx.translate(iconX, iconY);
-        ctx.scale(iconSize / 24, iconSize / 24);
-
-        // Matches `.card-icon-container`'s `color: var(--card-icon-color)`
-        // in the live preview, which falls back to the theme color.
-        ctx.strokeStyle = card.iconColor || card.themeColor || '#6366f1';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        const path = new Path2D(card.iconSvgPath);
-        ctx.stroke(path);
-        ctx.restore();
       }
 
       // 3. Draw Card Description (Word Wrap + Font Auto-scaling). Starts
@@ -477,7 +483,14 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       if (descText.length > 250) descFontSize *= 0.7;
 
       ctx.font = `${descFontSize}px "${bodyFont}", system-ui, sans-serif`;
-      ctx.fillStyle = (card.textColor || '#ffffff') + 'dd';
+      // Matches `.card-description-box`'s `color: var(--card-text)` in the
+      // live preview exactly -- full opacity, no alpha reduction. (The
+      // previous `+ 'dd'` suffix not only dimmed it below the preview's
+      // color but could silently no-op the whole assignment for some hex
+      // values, since canvas ignores an invalid fillStyle string and keeps
+      // whatever color was already active -- leaving the description in
+      // the theme color instead of the chosen typography color.)
+      ctx.fillStyle = card.textColor || '#ffffff';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
 
@@ -503,13 +516,22 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // Bottom-Left. Matches `.card-callout-tag` (a barely-there white fill
       // + hairline border) plus `.callout-left`'s single 3px theme-colored
       // accent edge -- not a full theme-tinted outline on all four sides.
-      const accentW = 0.03 * INCH_TO_PX; // ~3px at 300 DPI
+      // Scaled proportionally to the export's physical width the same way
+      // the card's inner trim is (see above), since the live preview always
+      // renders this at a fixed 320px width.
+      const accentW = w * (3 / 320);
+      // CSS reserves accent-border-width + 8px padding before the text
+      // starts (`border-left: 3px` + `padding: 2px 8px`). The text used to
+      // start right at the edge of the accent bar (only 8px in, with no
+      // allowance for the accent's own width), so it visually crowded into
+      // /overlapped the colored stripe.
+      const tagTextGap = accentW + (w * (8 / 320));
       if (card.bottomLeft) {
         const tagText = card.bottomLeft.toString();
         const textW = ctx.measureText(tagText).width;
         const tagH = 0.22 * INCH_TO_PX;
         const tagY = h - textMargin - tagH;
-        const tagW = textW + 16;
+        const tagW = textW + tagTextGap + (w * (8 / 320));
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
         ctx.fillRect(textMargin, tagY, tagW, tagH);
@@ -520,7 +542,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         ctx.fillRect(textMargin, tagY, accentW, tagH);
 
         ctx.fillStyle = card.textColor || '#ffffff';
-        ctx.fillText(tagText, textMargin + 8, h - textMargin - 4);
+        ctx.fillText(tagText, textMargin + tagTextGap, h - textMargin - 4);
       }
 
       // Bottom-Right
@@ -528,7 +550,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         const tagText = card.bottomRight.toString();
         const textW = ctx.measureText(tagText).width;
         const tagH = 0.22 * INCH_TO_PX;
-        const tagW = textW + 16;
+        const tagW = textW + tagTextGap + (w * (8 / 320));
         const tagX = w - textMargin - tagW;
         const tagY = h - textMargin - tagH;
 
@@ -542,7 +564,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
 
         ctx.fillStyle = card.textColor || '#ffffff';
         ctx.textAlign = 'right';
-        ctx.fillText(tagText, w - textMargin - 8, h - textMargin - 4);
+        ctx.fillText(tagText, w - textMargin - tagTextGap, h - textMargin - 4);
       }
     }
 
