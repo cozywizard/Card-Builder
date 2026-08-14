@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { CARD_SIZES, getSizeForType } from '../utils/binPacker.js';
+import { getCardSize } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
@@ -60,7 +60,7 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
   };
 
 // Dimensions based on card type selection or legacy size
-   const sizeInfo = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
+   const sizeInfo = getCardSize(card);
   
   // Font auto-scaling based on text lengths (Standard sizes only)
   const titleText = card.title || 'Untitled Card';

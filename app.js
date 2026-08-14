@@ -15,7 +15,7 @@ import * as localDB from './utils/db.js';
 import * as cloudDB from './utils/firestoreDB.js';
 import { auth, isFirebaseConfigured } from './utils/firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { packCards, getNextAvailablePosition, CARD_SIZES, getSizeForType } from './utils/binPacker.js';
+import { packCards, getNextAvailablePosition, getCardSize } from './utils/binPacker.js';
 import { exportSheetsToPDF } from './utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -374,7 +374,7 @@ function App() {
 
   // Add card to sheet list
   const handleAddCardToSheet = (card) => {
-    const sizeInfo = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
+    const sizeInfo = getCardSize(card);
 
     const currentPageItems = sheetItems.filter(item => item.sheetIndex === activeSheetIndex);
     const nextPosition = getNextAvailablePosition(currentPageItems, sizeInfo.width, sizeInfo.height);
@@ -482,7 +482,7 @@ function App() {
       for (let i = 0; i < results.length; i++) {
         const card = results[i];
         const qty = Math.max(0, Math.floor(Number(quantities[i]) || 0));
-        const sizeInfo = getSizeForType(card.cardType);
+        const sizeInfo = getCardSize(card);
 
         for (let q = 0; q < qty; q++) {
           const pageItems = currentItems.filter(item => item.sheetIndex === placeOnIndex);

@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { packCards, getNextAvailablePosition, SHEET_WIDTH, SHEET_HEIGHT, MARGIN, CARD_SIZES, getSizeForType } from '../utils/binPacker.js';
+import { packCards, getNextAvailablePosition, SHEET_WIDTH, SHEET_HEIGHT, MARGIN, getCardSize } from '../utils/binPacker.js';
 import CardPreview from './CardPreview.js';
 
 const html = htm.bind(h);
@@ -11,7 +11,7 @@ const html = htm.bind(h);
 function ScaledCardPreview({ card, slotW, slotH, forceSide }) {
   // CardPreview renders at a fixed container width of 320px.
   // Derive the natural preview height from the card's aspect ratio.
-  const sizeInfo = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
+  const sizeInfo = getCardSize(card);
   const aspect = sizeInfo.width / sizeInfo.height;
   const PREVIEW_W = 320;
   const PREVIEW_H = Math.round(PREVIEW_W / aspect);
@@ -95,7 +95,7 @@ export default function CardSheetBuilder({
   };
 
   const handleAddCardInstance = (card) => {
-    const sizeInfo = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
+    const sizeInfo = getCardSize(card);
     const currentPageItems = sheetItems.filter(item => item.sheetIndex === activeSheetIndex);
     const nextPosition = getNextAvailablePosition(currentPageItems, sizeInfo.width, sizeInfo.height);
 
@@ -461,12 +461,12 @@ export default function CardSheetBuilder({
 
             <div class="drawer-cards-list">
               ${libraryCards.length > 0 ? libraryCards.map(card => {
-                const sizeInfo = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
+                const sizeInfo = getCardSize(card);
                 return html`
                   <div class="drawer-card-item glass-panel" onClick=${() => handleAddCardInstance(card)}>
                     <div class="drawer-card-meta">
                       <span class="drawer-card-title">${card.title}</span>
-                      <span class="drawer-card-size">${card.cardType ? card.cardType.charAt(0).toUpperCase() + card.cardType.slice(1) : sizeInfo.name} (${sizeInfo.width}" × ${sizeInfo.height}")</span>
+                      <span class="drawer-card-size">${sizeInfo.isCustom ? 'Custom' : (card.cardType ? card.cardType.charAt(0).toUpperCase() + card.cardType.slice(1) : sizeInfo.name)} (${sizeInfo.isCustom ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px` : `${sizeInfo.width}" × ${sizeInfo.height}"`})</span>
                     </div>
                     <button class="primary-glow-btn mini-btn">Add Instance</button>
                   </div>

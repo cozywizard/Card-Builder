@@ -1,8 +1,9 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { CARD_SIZES, CARD_TYPES } from '../utils/binPacker.js';
+import { CARD_TYPES, getCardSize } from '../utils/binPacker.js';
 import { fetchCsv, parseCsvToRows } from '../utils/googleSheets.js';
+import { exportCardToPNG } from '../utils/pdfExporter.js';
 
 const html = htm.bind(h);
 
@@ -75,7 +76,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
       ${filteredCards.length > 0 ? html`
         <div class="library-grid animate-fade-in">
           ${filteredCards.map(card => {
-            const sizeInfo = CARD_SIZES[card.size] || CARD_SIZES['poker'];
+            const sizeInfo = getCardSize(card);
             return html`
               <div 
                 class="library-card-item glass-panel" 
@@ -88,7 +89,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
                 >
                   <div class="library-card-title-group">
                     <span class="lib-card-title" style="color: ${card.textColor || '#ffffff'}">${card.title}</span>
-                    <span class="lib-card-size">${(CARD_TYPES[card.cardType] && CARD_TYPES[card.cardType].name) || sizeInfo.name} • ${sizeInfo.width}"x${sizeInfo.height}"</span>
+                    <span class="lib-card-size">${(CARD_TYPES[card.cardType] && CARD_TYPES[card.cardType].name) || sizeInfo.name} • ${sizeInfo.isCustom ? `${sizeInfo.widthPx}x${sizeInfo.heightPx}px` : `${sizeInfo.width}"x${sizeInfo.height}"`}</span>
                   </div>
                   <div class="lib-card-icon-indicator" style="color: ${card.themeColor || '#6366f1'}">
                     ${card.iconType === 'upload' && card.iconUpload ? html`
@@ -151,9 +152,19 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
                       </svg>
                       Copy
                     </button>
-                    
-                    <button 
-                      class="lib-action-btn delete-btn" 
+
+                    <button
+                      class="lib-action-btn secondary-btn"
+                      onClick=${() => exportCardToPNG(card, 'front')}
+                      title=${`Download exact-pixel PNG (${sizeInfo.isCustom ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px` : `${Math.round(sizeInfo.width * 300)}×${Math.round(sizeInfo.height * 300)}px`})`}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                      </svg>
+                    </button>
+
+                    <button
+                      class="lib-action-btn delete-btn"
                       onClick=${() => {
                         if (confirm(`Are you sure you want to delete "${card.title}"?`)) {
                           onDeleteCard(card.id);

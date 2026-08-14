@@ -862,11 +862,28 @@ body {
   background: rgba(0, 0, 0, 0.25);
   border-top: 1px solid var(--glass-border);
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .save-deck-trigger-btn {
   width: 100%;
+}
+
+.png-download-row {
+  display: flex;
+  gap: 10px;
+}
+
+.png-download-row .secondary-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.png-dims-hint {
+  text-align: center;
 }
 
 /* ==========================================================================

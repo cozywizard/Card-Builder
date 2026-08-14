@@ -34,6 +34,40 @@ export function getSizeForType(cardType) {
   return CARD_SIZES[type.sizeKey] || CARD_SIZES['poker'];
 }
 
+// Fixed rendering resolution (pixels per inch) shared by the live preview,
+// the print-sheet PDF export, and single-card PNG export.
+export const DPI = 300;
+
+/**
+ * Resolves the working width/height (in inches) for a card.
+ * If the card has an exact custom pixel size set (e.g. to match a print
+ * service's required dimensions, like The Game Crafter's card templates),
+ * that takes priority over the card type/size preset. The card's type
+ * still controls which layout template is rendered — custom sizing only
+ * overrides the physical output dimensions.
+ */
+export function getCardSize(card) {
+  if (!card) return CARD_SIZES['poker'];
+
+  if (card.sizeMode === 'custom') {
+    const widthPx = Number(card.customWidthPx);
+    const heightPx = Number(card.customHeightPx);
+    if (widthPx > 0 && heightPx > 0) {
+      return {
+        name: 'Custom',
+        width: widthPx / DPI,
+        height: heightPx / DPI,
+        widthPx,
+        heightPx,
+        isCustom: true
+      };
+    }
+  }
+
+  if (card.cardType) return getSizeForType(card.cardType);
+  return CARD_SIZES[card.size] || CARD_SIZES['poker'];
+}
+
 export function getNextAvailablePosition(existingItems, itemWidth, itemHeight, pageWidth = SHEET_WIDTH, pageHeight = SHEET_HEIGHT, margin = MARGIN) {
   const minX = margin;
   const maxX = pageWidth - margin;
@@ -110,7 +144,7 @@ export function packCards(items) {
 
   // Clone items to avoid mutating inputs and resolve their dimensions
   const cardsToPack = items.map(item => {
-    const sizeInfo = item.card.cardType ? getSizeForType(item.card.cardType) : (CARD_SIZES[item.card.size] || CARD_SIZES['poker']);
+    const sizeInfo = getCardSize(item.card);
     return {
       id: item.id,
       card: item.card,

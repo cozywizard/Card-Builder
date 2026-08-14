@@ -4,12 +4,12 @@
  * Uses jsPDF for rendering and a 300 DPI HTML Canvas for high fidelity.
  */
 
-import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType } from './binPacker.js';
+import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI } from './binPacker.js';
 import { loadGoogleFont } from '../components/CardCreator.js';
 
-// DPI resolution for printing
-const DPI = 300;
-const INCH_TO_PX = DPI; 
+// DPI resolution for printing (shared with binPacker.js so custom pixel
+// sizes and rendered output stay in exact sync)
+const INCH_TO_PX = DPI;
 
 /**
  * Loads a base64 or URL image asynchronously
@@ -79,9 +79,11 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
  * Draws a card onto a high-DPI canvas
  */
 export async function renderCardToCanvas(card, canvas, side = 'front') {
-  const size = card.cardType ? getSizeForType(card.cardType) : (CARD_SIZES[card.size] || CARD_SIZES['poker']);
-  const w = size.width * INCH_TO_PX;
-  const h = size.height * INCH_TO_PX;
+  const size = getCardSize(card);
+  // Prefer the card's exact custom pixel dimensions when set, so rounding
+  // from inches back to pixels can never drift off the requested size.
+  const w = size.isCustom ? size.widthPx : size.width * INCH_TO_PX;
+  const h = size.isCustom ? size.heightPx : size.height * INCH_TO_PX;
 
   canvas.width = w;
   canvas.height = h;
@@ -569,4 +571,37 @@ export async function exportSheetsToPDF(sheets, onProgress = () => {}) {
   }
 
   doc.save(`cardforge-deck-${Date.now()}.pdf`);
+}
+
+/**
+ * Renders a single card face to a standalone PNG and triggers a browser
+ * download. The output image is exactly the card's configured pixel size
+ * (its custom pixel size if set, otherwise its preset size at 300 DPI) —
+ * ready to upload directly to a print-on-demand service like The Game
+ * Crafter, which requires exact pixel dimensions per card.
+ *
+ * @param {Object} card - The card template to render
+ * @param {'front'|'back'} side - Which face to export
+ */
+export async function exportCardToPNG(card, side = 'front') {
+  const canvas = document.createElement('canvas');
+  await renderCardToCanvas(card, canvas, side);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) return;
+
+  const safeTitle = (card.title || 'card')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'card';
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${safeTitle}-${side}-${canvas.width}x${canvas.height}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

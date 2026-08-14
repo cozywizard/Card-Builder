@@ -2,7 +2,8 @@ import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import IconPicker from './IconPicker.js';
-import { CARD_SIZES, CARD_TYPES, getSizeForType } from '../utils/binPacker.js';
+import { CARD_TYPES, getSizeForType, getCardSize, DPI } from '../utils/binPacker.js';
+import { exportCardToPNG } from '../utils/pdfExporter.js';
 
 const html = htm.bind(h);
 
@@ -123,6 +124,41 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
     });
   };
 
+  // Exact Pixel Size override (e.g. to match a print service's required
+  // card template dimensions, like The Game Crafter). This only overrides
+  // the physical output dimensions — the Card Type still controls layout.
+  const enableCustomSize = () => {
+    const base = getSizeForType(card.cardType || 'attack');
+    onChangeCard({
+      ...card,
+      sizeMode: 'custom',
+      customWidthPx: card.customWidthPx || Math.round(base.width * DPI),
+      customHeightPx: card.customHeightPx || Math.round(base.height * DPI)
+    });
+  };
+
+  const disableCustomSize = () => {
+    onChangeCard({ ...card, sizeMode: 'preset' });
+  };
+
+  const handleCustomDimensionChange = (field, value) => {
+    if (value === '') {
+      onChangeCard({ ...card, [field]: '' });
+      return;
+    }
+    const num = Math.max(1, parseInt(value, 10) || 1);
+    onChangeCard({ ...card, [field]: num });
+  };
+
+  const handleDownloadPNG = async (side) => {
+    await exportCardToPNG(card, side);
+  };
+
+  const sizeInfo = getCardSize(card);
+  const pngDimsLabel = sizeInfo.isCustom
+    ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px`
+    : `${Math.round(sizeInfo.width * DPI)}×${Math.round(sizeInfo.height * DPI)}px`;
+
   return html`
     <div class="creator-control-panel glass-panel">
       <div class="creator-tabs">
@@ -166,6 +202,55 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                 })}
               </select>
             </div>
+
+            <!-- Exact Pixel Size Override -->
+            <div class="form-group">
+              <label class="input-label">Sizing Mode</label>
+              <div class="icon-toggle-row">
+                <button
+                  type="button"
+                  class="toggle-choice-btn ${(card.sizeMode || 'preset') === 'preset' ? 'active' : ''}"
+                  onClick=${disableCustomSize}
+                >Standard Size</button>
+                <button
+                  type="button"
+                  class="toggle-choice-btn ${card.sizeMode === 'custom' ? 'active' : ''}"
+                  onClick=${enableCustomSize}
+                >Exact Pixel Size</button>
+              </div>
+            </div>
+
+            ${card.sizeMode === 'custom' && html`
+              <div class="form-group" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div>
+                  <label class="input-label">Width (px)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    class="form-text-input"
+                    value=${card.customWidthPx ?? ''}
+                    onInput=${(e) => handleCustomDimensionChange('customWidthPx', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label class="input-label">Height (px)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    class="form-text-input"
+                    value=${card.customHeightPx ?? ''}
+                    onInput=${(e) => handleCustomDimensionChange('customHeightPx', e.target.value)}
+                  />
+                </div>
+              </div>
+              <p class="input-hint-text">
+                Renders at 300 DPI → ${((Number(card.customWidthPx) || 0) / DPI).toFixed(2)}" × ${((Number(card.customHeightPx) || 0) / DPI).toFixed(2)}".
+                Enter the exact pixel dimensions from your print service's card template spec (e.g. The Game Crafter, bleed included).
+                Sizes larger than 8" × 10.5" (2400×3150px) won't fit the print-sheet PDF — use "Download PNG" below instead.
+              </p>
+            `}
 
             <!-- Theme Presets -->
             <div class="form-group">
@@ -709,6 +794,22 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
           </svg>
           Save Template to Library
         </button>
+
+        <div class="png-download-row">
+          <button class="secondary-btn" onClick=${() => handleDownloadPNG('front')} title="Download the front face as a PNG at its exact pixel size">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            Download Front PNG
+          </button>
+          <button class="secondary-btn" onClick=${() => handleDownloadPNG('back')} title="Download the back face as a PNG at its exact pixel size">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="margin-right-xs">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            Download Back PNG
+          </button>
+        </div>
+        <p class="input-hint-text png-dims-hint">Exports at ${pngDimsLabel} — exact pixel-for-pixel, ready to upload to print services like The Game Crafter.</p>
       </div>
 
       <!-- VECTOR ICON SELECTOR MODAL (Main Header Icon) -->
