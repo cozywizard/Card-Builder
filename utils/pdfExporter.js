@@ -176,7 +176,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     // sat outside the safe zone instead of inside it. Radius/stroke weight
     // stay proportional to width -- purely cosmetic, not a safety concern.
     const trimInset = CONTENT_INSET * INCH_TO_PX;
-    const trimRadius = w * (10 / 320);
+    // Matches `.card-inner-container`'s 16px corner rounding (see app.css)
+    // so this curve reads as concentric with the card's outer edge instead
+    // of a visibly tighter radius.
+    const trimRadius = w * (16 / 320);
     const trimLineWidth = w * (2 / 320);
     ctx.save();
     ctx.globalAlpha = 0.7;
