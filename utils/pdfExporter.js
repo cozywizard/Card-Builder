@@ -25,11 +25,55 @@ function loadImage(src) {
   });
 }
 
+/**
+ * Rasterizes raw icon-library SVG markup (as fetched by IconPicker) into a
+ * loadable image, recoloring any `currentColor` references to a fixed hex
+ * value first. The live preview colors these icons by setting the CSS
+ * `color` property on a wrapping element and letting `fill="currentColor"`
+ * inherit it -- a standalone data-URI SVG loaded into an <img> has no such
+ * page context to inherit from, so the color has to be baked in directly.
+ */
+function loadColoredSvg(svgText, color) {
+  if (!svgText) return Promise.resolve(null);
+  const recolored = svgText.replace(/currentColor/g, color);
+  const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolored)}`;
+  return loadImage(dataUrl);
+}
+
+/**
+ * Computes draw dimensions/offset (relative to the frame's own top-left) to
+ * fit an image inside a frame while preserving aspect ratio and letterboxing
+ * -- the canvas equivalent of CSS `object-fit: contain`.
+ */
+function fitContain(imgW, imgH, frameW, frameH) {
+  const imgRatio = imgW / imgH;
+  const frameRatio = frameW / frameH;
+  if (imgRatio > frameRatio) {
+    const dw = frameW;
+    const dh = frameW / imgRatio;
+    return { dw, dh, dx: 0, dy: (frameH - dh) / 2 };
+  }
+  const dh = frameH;
+  const dw = frameH * imgRatio;
+  return { dw, dh, dx: (frameW - dw) / 2, dy: 0 };
+}
+
+// Canvas fillText only honors a weight/style once that exact face has been
+// loaded via the Font Loading API -- unlike DOM/CSS text, it will NOT fall
+// back gracefully to a loaded weight of the same family, it silently
+// substitutes the system default font instead. The card layout below draws
+// text at 400 (body), 500 (subheadline) and bold/700 (titles, badges,
+// footer tags), so every one of those has to be explicitly loaded or the
+// exported PNG's fonts drift from what the live preview shows.
+const CANVAS_FONT_WEIGHTS = [400, 500, 700];
+
 async function ensureFontLoaded(fontName) {
   loadGoogleFont(fontName);
   if (!fontName) return;
   try {
-    await document.fonts.load(`1em "${fontName}"`);
+    await Promise.all(
+      CANVAS_FONT_WEIGHTS.map((weight) => document.fonts.load(`${weight} 1em "${fontName}"`))
+    );
   } catch (e) {
     console.warn(`Font loading timed out or failed for: ${fontName}`, e);
   }
@@ -122,15 +166,37 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillStyle = card.bgColor || '#1e1e24';
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-    // Draw Subtle Outer Glow Border or Frame
+    // Draw Card Inner Trim -- matches the live preview's `.card-inner-trim`:
+    // a thin, inset, rounded, semi-transparent border. (Previously this was
+    // a thick ~24px border flush with the card edge, which looked nothing
+    // like the hairline trim shown on screen.) The preview always displays
+    // the card at a fixed 320px width, so its pixel values (8px inset, 2px
+    // stroke, 10px radius) are scaled here proportionally to the export's
+    // actual physical width.
+    const trimInset = w * (8 / 320);
+    const trimRadius = w * (10 / 320);
+    const trimLineWidth = w * (2 / 320);
+    ctx.save();
+    ctx.globalAlpha = 0.7;
     ctx.strokeStyle = card.themeColor || '#6366f1';
-    ctx.lineWidth = 0.08 * INCH_TO_PX; // ~24px at 300 DPI
-    ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+    ctx.lineWidth = trimLineWidth;
+    drawRoundedRect(
+      ctx,
+      trimInset + trimLineWidth / 2,
+      trimInset + trimLineWidth / 2,
+      w - trimInset * 2 - trimLineWidth,
+      h - trimInset * 2 - trimLineWidth,
+      trimRadius
+    );
+    ctx.stroke();
+    ctx.restore();
 
-    // 2. Card Header (Common for both layouts)
+    // 2. Card Header (Common for both layouts). Always anchored to the top
+    // of the card -- the live preview's header region is always first in
+    // its flex column, whether or not the card has art underneath it.
     ctx.fillStyle = card.textColor || '#ffffff';
     const titleFont = card.titleFont || 'Outfit';
-    
+
     // Auto-scale title font based on title length
     let titleFontSize = 0.22 * INCH_TO_PX; // Default title size in inches
     const titleText = card.title || 'Untitled Card';
@@ -140,11 +206,9 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.font = `bold ${titleFontSize}px "${titleFont}", system-ui, sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    
+
     const textMargin = 0.2 * INCH_TO_PX;
-    
-    // Calculate Title position based on layout
-    const titleY = (card.size !== 'large' && card.cardArt) ? (h * 0.45) + (0.25 * INCH_TO_PX) : textMargin;
+    const titleY = textMargin;
     ctx.fillText(titleText, textMargin, titleY);
 
     const bodyFont = card.bodyFont || 'Inter';
@@ -289,45 +353,51 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         ctx.fillText(card.headline.toUpperCase(), textMargin, subY);
       }
 
-      // Draw Illustration Art Frame Background/Art
+      // Bottom of the header block (title + optional headline). Everything
+      // below -- the art box, then description, then footer -- stacks
+      // directly beneath it, matching the live preview's flex-column order
+      // of header -> art -> description -> footer.
+      const headerBottomY = subY + subFontSize + (0.1 * INCH_TO_PX);
+
+      // Draw Illustration Art Frame. This 45%-of-card-height zone is always
+      // reserved right below the header -- matching `.card-art-box`, which
+      // the live preview renders (with a white backing) whether or not art
+      // has been uploaded -- so description/footer positioning lines up
+      // with the preview either way.
       const artHeight = h * 0.45;
       const artMargin = 0.15 * INCH_TO_PX;
+      const artY = headerBottomY;
+      const artRadius = 0.06 * INCH_TO_PX;
+      const frameW = w - (artMargin * 2);
+
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      drawRoundedRect(ctx, artMargin, artY, frameW, artHeight, artRadius);
+      ctx.fill();
+      ctx.clip();
 
       if (card.cardArt) {
         const artImg = await loadImage(card.cardArt);
         if (artImg) {
-          ctx.save();
-
-          const frameW = w - (artMargin * 2);
-          const imgRatio = artImg.width / artImg.height;
-          const frameRatio = frameW / artHeight;
-          let dw, dh, dx, dy;
-
-          if (imgRatio > frameRatio) {
-            dw = frameW;
-            dh = frameW / imgRatio;
-            dx = artMargin;
-            dy = artMargin + (artHeight - dh) / 2;
-          } else {
-            dh = artHeight;
-            dw = artHeight * imgRatio;
-            dx = artMargin + (frameW - dw) / 2;
-            dy = artMargin;
-          }
-
-          ctx.drawImage(artImg, dx, dy, dw, dh);
-          ctx.restore();
-          
-          ctx.strokeStyle = (card.themeColor || '#6366f1') + '66';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(artMargin, artMargin, w - (artMargin * 2), artHeight);
+          const { dw, dh, dx, dy } = fitContain(artImg.width, artImg.height, frameW, artHeight);
+          ctx.drawImage(artImg, artMargin + dx, artY + dy, dw, dh);
+        }
+      } else if (card.cardArtType === 'icon' && card.cardArtSvg) {
+        // Icon-library illustration mode (`.card-art-full-icon` in the live
+        // preview) -- previously silently ignored here, leaving the
+        // exported card's art frame blank.
+        const artIconImg = await loadColoredSvg(card.cardArtSvg, card.artIconColor || '#6366f1');
+        if (artIconImg) {
+          const { dw, dh, dx, dy } = fitContain(artIconImg.width, artIconImg.height, frameW, artHeight);
+          ctx.drawImage(artIconImg, artMargin + dx, artY + dy, dw, dh);
         }
       }
+      ctx.restore();
 
       // DRAW ILLUSTRATION OVERLAY ICON IF SPECIFIED
       if (card.artIconType && card.artIconType !== 'none') {
         const rX = w / 2;
-        const rY = artMargin + (artHeight / 2);
+        const rY = artY + (artHeight / 2);
         const rSize = 0.22 * INCH_TO_PX; // circular radius ~66px
 
         ctx.save();
@@ -379,19 +449,24 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         ctx.save();
         ctx.translate(iconX, iconY);
         ctx.scale(iconSize / 24, iconSize / 24);
-        
-        ctx.strokeStyle = card.themeColor || '#6366f1';
+
+        // Matches `.card-icon-container`'s `color: var(--card-icon-color)`
+        // in the live preview, which falls back to the theme color.
+        ctx.strokeStyle = card.iconColor || card.themeColor || '#6366f1';
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        
+
         const path = new Path2D(card.iconSvgPath);
         ctx.stroke(path);
         ctx.restore();
       }
 
-      // 3. Draw Card Description (Word Wrap + Font Auto-scaling)
-      const descY = subY + subFontSize + (0.12 * INCH_TO_PX);
+      // 3. Draw Card Description (Word Wrap + Font Auto-scaling). Starts
+      // below the art box (not right after the headline) -- matching the
+      // live preview, where the description is a separate flex item that
+      // comes after the art box, not stacked on top of it.
+      const descY = artY + artHeight + (0.12 * INCH_TO_PX);
       const descWidth = w - (textMargin * 2);
       
       let descText = card.description || '';
@@ -425,18 +500,25 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
       
-      // Bottom-Left
+      // Bottom-Left. Matches `.card-callout-tag` (a barely-there white fill
+      // + hairline border) plus `.callout-left`'s single 3px theme-colored
+      // accent edge -- not a full theme-tinted outline on all four sides.
+      const accentW = 0.03 * INCH_TO_PX; // ~3px at 300 DPI
       if (card.bottomLeft) {
         const tagText = card.bottomLeft.toString();
         const textW = ctx.measureText(tagText).width;
         const tagH = 0.22 * INCH_TO_PX;
-        
-        ctx.fillStyle = (card.themeColor || '#6366f1') + '22';
-        ctx.fillRect(textMargin, h - textMargin - tagH, textW + 16, tagH);
-        ctx.strokeStyle = card.themeColor || '#6366f1';
+        const tagY = h - textMargin - tagH;
+        const tagW = textW + 16;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.fillRect(textMargin, tagY, tagW, tagH);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(textMargin, h - textMargin - tagH, textW + 16, tagH);
-        
+        ctx.strokeRect(textMargin, tagY, tagW, tagH);
+        ctx.fillStyle = card.themeColor || '#6366f1';
+        ctx.fillRect(textMargin, tagY, accentW, tagH);
+
         ctx.fillStyle = card.textColor || '#ffffff';
         ctx.fillText(tagText, textMargin + 8, h - textMargin - 4);
       }
@@ -446,14 +528,18 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         const tagText = card.bottomRight.toString();
         const textW = ctx.measureText(tagText).width;
         const tagH = 0.22 * INCH_TO_PX;
-        const tagX = w - textMargin - textW - 16;
-        
-        ctx.fillStyle = (card.themeColor || '#6366f1') + '22';
-        ctx.fillRect(tagX, h - textMargin - tagH, textW + 16, tagH);
-        ctx.strokeStyle = card.themeColor || '#6366f1';
+        const tagW = textW + 16;
+        const tagX = w - textMargin - tagW;
+        const tagY = h - textMargin - tagH;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.fillRect(tagX, tagY, tagW, tagH);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(tagX, h - textMargin - tagH, textW + 16, tagH);
-        
+        ctx.strokeRect(tagX, tagY, tagW, tagH);
+        ctx.fillStyle = card.themeColor || '#6366f1';
+        ctx.fillRect(tagX + tagW - accentW, tagY, accentW, tagH);
+
         ctx.fillStyle = card.textColor || '#ffffff';
         ctx.textAlign = 'right';
         ctx.fillText(tagText, w - textMargin - 8, h - textMargin - 4);
