@@ -29,6 +29,19 @@ export const CARD_SIZES = {
 export const BLEED = 0.125;      // inches of art bleed added beyond the trim edge, per side
 export const SAFE_ZONE = 0.25;   // inches from the bleed (outer file) edge that text/art must stay inside — i.e. 0.125" inside the trim line
 
+// Inset (from the trim edge, i.e. the live preview's own box / the export's
+// (0,0)-(w,h) trim-box coordinates) that the SAFE_ZONE line sits at.
+export const SAFE_ZONE_INSET = SAFE_ZONE - BLEED; // 0.125"
+
+// Inset every piece of card content -- title, art, description, footer
+// tags, AND the decorative trim border itself -- is drawn at, in both the
+// live preview and the exported PNG. Deliberately larger than
+// SAFE_ZONE_INSET (not just equal to it) so everything reads as clearly
+// *inside* the dashed safe-zone guide with real breathing room, including
+// clearing the guide's own rounded corners near the card's corners, rather
+// than sitting flush against (or past) the line.
+export const CONTENT_INSET = 0.2; // inches
+
 /**
  * Given a trim-size sizeInfo (as returned by getCardSize), returns the
  * bleed-inclusive output dimensions used for print-ready exports.

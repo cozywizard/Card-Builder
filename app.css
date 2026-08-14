@@ -1003,7 +1003,9 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  /* Keeps header/art/description/footer inside the print safe zone --
+     see CardPreview.js for how this is computed per card size. */
+  padding: var(--card-safe-padding, 20px);
   box-sizing: border-box;
 }
 
@@ -1037,10 +1039,14 @@ body {
 
 .card-inner-trim {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  /* Same inset as the content padding above -- was a fixed 8px, which sat
+     outside the safe-zone guide instead of inside it (the guide is a
+     percentage of card size; 8px only happened to clear it for
+     poker-width cards). */
+  top: var(--card-safe-padding, 8px);
+  left: var(--card-safe-padding, 8px);
+  right: var(--card-safe-padding, 8px);
+  bottom: var(--card-safe-padding, 8px);
   border: 2px solid var(--card-theme, #6366f1);
   border-radius: 10px;
   pointer-events: none;

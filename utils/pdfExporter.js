@@ -4,7 +4,7 @@
  * Uses jsPDF for rendering and a 300 DPI HTML Canvas for high fidelity.
  */
 
-import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED } from './binPacker.js';
+import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED, CONTENT_INSET } from './binPacker.js';
 import { loadGoogleFont } from '../components/CardCreator.js';
 
 // DPI resolution for printing (shared with binPacker.js so custom pixel
@@ -167,13 +167,15 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
     // Draw Card Inner Trim -- matches the live preview's `.card-inner-trim`:
-    // a thin, inset, rounded, semi-transparent border. (Previously this was
-    // a thick ~24px border flush with the card edge, which looked nothing
-    // like the hairline trim shown on screen.) The preview always displays
-    // the card at a fixed 320px width, so its pixel values (8px inset, 2px
-    // stroke, 10px radius) are scaled here proportionally to the export's
-    // actual physical width.
-    const trimInset = w * (8 / 320);
+    // a thin, rounded, semi-transparent border. Its inset is CONTENT_INSET
+    // (a fixed physical measurement, same as every other margin below) --
+    // NOT proportional to card width like the old `w * (8/320)` -- because
+    // the safe zone it needs to clear is itself a fixed 0.125" from the
+    // trim edge regardless of card size. A proportional inset shrank right
+    // along with narrower card types (e.g. Bridge/Business/Mini) until it
+    // sat outside the safe zone instead of inside it. Radius/stroke weight
+    // stay proportional to width -- purely cosmetic, not a safety concern.
+    const trimInset = CONTENT_INSET * INCH_TO_PX;
     const trimRadius = w * (10 / 320);
     const trimLineWidth = w * (2 / 320);
     ctx.save();
@@ -207,7 +209,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    const textMargin = 0.2 * INCH_TO_PX;
+    const textMargin = CONTENT_INSET * INCH_TO_PX;
     const titleY = textMargin;
     ctx.fillText(titleText, textMargin, titleY);
 
@@ -365,7 +367,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // has been uploaded -- so description/footer positioning lines up
       // with the preview either way.
       const artHeight = h * 0.45;
-      const artMargin = 0.15 * INCH_TO_PX;
+      const artMargin = textMargin; // keep flush with the same safe content inset as everything else
       const artY = headerBottomY;
       const artRadius = 0.06 * INCH_TO_PX;
       const frameW = w - (artMargin * 2);
@@ -577,10 +579,13 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         // bleed treatment (no white sliver at the trim edge)
         ctx.drawImage(backImg, -bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-        // Border over image
+        // Border over image -- inset to CONTENT_INSET (not just half its own
+        // stroke width) so the border itself stays inside the safe zone,
+        // same as the front's trim.
+        const backBorderInset = CONTENT_INSET * INCH_TO_PX;
         ctx.strokeStyle = card.themeColor || '#6366f1';
         ctx.lineWidth = 0.08 * INCH_TO_PX;
-        ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+        ctx.strokeRect(backBorderInset, backBorderInset, w - backBorderInset * 2, h - backBorderInset * 2);
         ctx.restore();
         return;
       }
@@ -590,18 +595,20 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillStyle = card.bgColor || '#1e1e24';
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-    // Thick border
+    // Thick border -- inset to CONTENT_INSET so it stays inside the safe
+    // zone rather than sitting flush against the trim edge.
     const borderThickness = 0.08 * INCH_TO_PX;
+    const borderInset = CONTENT_INSET * INCH_TO_PX;
     ctx.strokeStyle = card.themeColor || '#6366f1';
     ctx.lineWidth = borderThickness;
-    ctx.strokeRect(borderThickness / 2, borderThickness / 2, w - borderThickness, h - borderThickness);
+    ctx.strokeRect(borderInset, borderInset, w - borderInset * 2, h - borderInset * 2);
 
     // Inner geometric mesh pattern
     ctx.save();
     ctx.strokeStyle = (card.themeColor || '#6366f1') + '44'; // Translucent theme color
     ctx.lineWidth = 2;
-    
-    const sizeOffset = borderThickness + (0.1 * INCH_TO_PX);
+
+    const sizeOffset = borderInset + (0.1 * INCH_TO_PX);
     ctx.beginPath();
     ctx.rect(sizeOffset, sizeOffset, w - (sizeOffset * 2), h - (sizeOffset * 2));
     ctx.clip();
