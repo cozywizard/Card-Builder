@@ -1,13 +1,14 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { getCardSize } from '../utils/binPacker.js';
+import { getCardSize, BLEED, SAFE_ZONE } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
 
 export default function CardPreview({ card, forceSide = 'front', cardTypeDefaults = {} }) {
   const [side, setSide] = useState('front');
+  const [showGuides, setShowGuides] = useState(true);
   const cardRef = useRef(null);
   
   // Sync forceSide if parent changes it
@@ -61,7 +62,16 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
 
 // Dimensions based on card type selection or legacy size
    const sizeInfo = getCardSize(card);
-  
+
+  // The Game Crafter print safe-zone guide (matches their card proofing
+  // overlay: 0.125" bleed + a further 0.125" clearance inside the trim
+  // line = 0.25" total from the outer file edge). Expressed as a % inset
+  // from the card box edge since our on-screen card IS the trim box.
+  // Not meaningful for custom pixel sizes — we don't know their bleed spec.
+  const safeInsetPctX = !sizeInfo.isCustom ? ((SAFE_ZONE - BLEED) / sizeInfo.width) * 100 : null;
+  const safeInsetPctY = !sizeInfo.isCustom ? ((SAFE_ZONE - BLEED) / sizeInfo.height) * 100 : null;
+  const guidesAvailable = safeInsetPctX != null;
+
   // Font auto-scaling based on text lengths (Standard sizes only)
   const titleText = card.title || 'Untitled Card';
   const getTitleFontSize = () => {
@@ -92,6 +102,20 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
         <span>${side === 'front' ? 'View Back' : 'View Front'}</span>
       </button>
 
+      <!-- Toggle Print Safe-Zone Guide (The Game Crafter proofing overlay) -->
+      ${guidesAvailable && html`
+        <button
+          class="flip-btn-floating guides-toggle-btn ${showGuides ? 'active' : ''}"
+          onClick=${(e) => { e.stopPropagation(); setShowGuides(!showGuides); }}
+          title="Toggle The Game Crafter print safe-zone guide (0.25&quot; from the bleed edge / 0.125&quot; inside the trim line)"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/>
+          </svg>
+          <span>${showGuides ? 'Hide' : 'Show'} Safe Zone</span>
+        </button>
+      `}
+
       <!-- Interactive 3D Card -->
       <div 
         ref=${cardRef}
@@ -115,6 +139,11 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
         <div class="card-face card-front">
           <!-- Outer themed trim -->
           <div class="card-inner-trim"></div>
+
+          <!-- The Game Crafter print safe-zone guide -->
+          ${showGuides && guidesAvailable && html`
+            <div class="print-safe-zone-guide" style="top: ${safeInsetPctY}%; left: ${safeInsetPctX}%; right: ${safeInsetPctX}%; bottom: ${safeInsetPctY}%;"></div>
+          `}
 
           <!-- Card Header (Title & Subtitle) -->
           <div class="card-header-region">
@@ -243,6 +272,11 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
               </div>
             `;
           })()}
+
+          <!-- The Game Crafter print safe-zone guide -->
+          ${showGuides && guidesAvailable && html`
+            <div class="print-safe-zone-guide" style="top: ${safeInsetPctY}%; left: ${safeInsetPctX}%; right: ${safeInsetPctX}%; bottom: ${safeInsetPctY}%;"></div>
+          `}
         </div>
       </div>
     </div>

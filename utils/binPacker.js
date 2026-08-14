@@ -20,6 +20,33 @@ export const CARD_SIZES = {
   'large': { name: 'Large Size', width: 3.0, height: 5.0 }
 };
 
+// --- Print-service bleed & safe-zone spec (matches The Game Crafter's
+// published card proofing template: https://help.thegamecrafter.com/article/391-bleed )
+// CARD_SIZES above are FINISHED/TRIM sizes — the size the card is cut to.
+// Print files need extra artwork bleeding past that trim edge so a die-cut
+// wobble never exposes white, and all text must stay clear of the trim
+// line by a further safety margin.
+export const BLEED = 0.125;      // inches of art bleed added beyond the trim edge, per side
+export const SAFE_ZONE = 0.25;   // inches from the bleed (outer file) edge that text/art must stay inside — i.e. 0.125" inside the trim line
+
+/**
+ * Given a trim-size sizeInfo (as returned by getCardSize), returns the
+ * bleed-inclusive output dimensions used for print-ready exports.
+ * Custom pixel sizes are assumed to already be the print service's exact
+ * template size (bleed included, per the "Exact Pixel Size" hint text), so
+ * they pass through unchanged rather than getting bleed added on top.
+ */
+export function getBleedSize(sizeInfo) {
+  if (!sizeInfo || sizeInfo.isCustom) {
+    return { bleedWidth: sizeInfo.width, bleedHeight: sizeInfo.height, hasBleed: false };
+  }
+  return {
+    bleedWidth: sizeInfo.width + BLEED * 2,
+    bleedHeight: sizeInfo.height + BLEED * 2,
+    hasBleed: true
+  };
+}
+
 // Logical card types used in the app. These map to physical sizes above.
 export const CARD_TYPES = {
   'attack': { name: 'Attack', sizeKey: 'poker' },

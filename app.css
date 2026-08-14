@@ -951,6 +951,28 @@ body {
   box-shadow: 0 0 10px var(--accent-primary);
 }
 
+.guides-toggle-btn {
+  top: -12px;
+  left: -12px;
+  right: auto;
+}
+
+.guides-toggle-btn.active {
+  border-color: #3ba7db;
+  color: #3ba7db;
+}
+
+/* The Game Crafter print safe-zone guide overlay — mirrors their card
+   proofing template's blue dashed "Safe Zone" line: text/art should stay
+   inside this box so nothing gets trimmed off by a die-cut wobble. */
+.print-safe-zone-guide {
+  position: absolute;
+  border: 2px dashed #3ba7db;
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 6;
+}
+
 /* 3D Rotator card */
 .card-inner-container {
   width: 100%;
@@ -1081,8 +1103,7 @@ body {
 .card-art-box {
   width: 100%;
   height: 45%;
-  background: rgba(0, 0, 0, 0.05);
-  border: 2px solid var(--card-theme, #6366f1);
+  background: #ffffff;
   border-radius: 6px;
   margin-bottom: 12px;
   overflow: hidden;
@@ -1094,7 +1115,7 @@ body {
 }
 
 .card-art-box.has-art {
-  background: rgba(0, 0, 0, 0.02);
+  background: #ffffff;
 }
 
 .card-art-image {

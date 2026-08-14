@@ -2,7 +2,7 @@ import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import IconPicker from './IconPicker.js';
-import { CARD_TYPES, getSizeForType, getCardSize, DPI } from '../utils/binPacker.js';
+import { CARD_TYPES, getSizeForType, getCardSize, getBleedSize, DPI, BLEED } from '../utils/binPacker.js';
 import { exportCardToPNG } from '../utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -155,9 +155,10 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
   };
 
   const sizeInfo = getCardSize(card);
+  const bleedInfo = getBleedSize(sizeInfo);
   const pngDimsLabel = sizeInfo.isCustom
     ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px`
-    : `${Math.round(sizeInfo.width * DPI)}×${Math.round(sizeInfo.height * DPI)}px`;
+    : `${Math.round(bleedInfo.bleedWidth * DPI)}×${Math.round(bleedInfo.bleedHeight * DPI)}px`;
 
   return html`
     <div class="creator-control-panel glass-panel">
@@ -198,9 +199,12 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
               >
                 ${Object.entries(CARD_TYPES).map(([key, val]) => {
                   const sz = getSizeForType(key);
-                  return html`<option value=${key}>${val.name} (${sz.width}" × ${sz.height}")</option>`;
+                  return html`<option value=${key}>${val.name} (${sz.width}" × ${sz.height}" finished size)</option>`;
                 })}
               </select>
+              <p class="input-hint-text">
+                Finished (trim) size — the physical card size after cutting. PNG exports automatically add The Game Crafter's standard ${BLEED}" bleed border beyond this edge.
+              </p>
             </div>
 
             <!-- Exact Pixel Size Override -->
@@ -809,7 +813,9 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
             Download Back PNG
           </button>
         </div>
-        <p class="input-hint-text png-dims-hint">Exports at ${pngDimsLabel} — exact pixel-for-pixel, ready to upload to print services like The Game Crafter.</p>
+        <p class="input-hint-text png-dims-hint">
+          Exports at ${pngDimsLabel}${!sizeInfo.isCustom ? ` — includes The Game Crafter's standard ${BLEED}" bleed border automatically` : ''}, exact pixel-for-pixel and ready to upload to print services like The Game Crafter.
+        </p>
       </div>
 
       <!-- VECTOR ICON SELECTOR MODAL (Main Header Icon) -->

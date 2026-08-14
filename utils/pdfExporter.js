@@ -4,7 +4,7 @@
  * Uses jsPDF for rendering and a 300 DPI HTML Canvas for high fidelity.
  */
 
-import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI } from './binPacker.js';
+import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED } from './binPacker.js';
 import { loadGoogleFont } from '../components/CardCreator.js';
 
 // DPI resolution for printing (shared with binPacker.js so custom pixel
@@ -76,21 +76,40 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
 }
 
 /**
- * Draws a card onto a high-DPI canvas
+ * Draws a card onto a high-DPI canvas.
+ *
+ * @param {Object} card
+ * @param {HTMLCanvasElement} canvas
+ * @param {'front'|'back'} side
+ * @param {Object} [opts]
+ * @param {boolean} [opts.bleed=false] - When true, the canvas is sized to
+ *   include The Game Crafter's standard 0.125" bleed border beyond the
+ *   card's trim edge (matching their card proofing template), and the
+ *   background/art is extended to fill it. All existing layout math below
+ *   is untouched — it still operates in trim-box coordinates ((0,0) to
+ *   (w,h)) via a context translate, so nothing needs to be re-derived.
+ *   Custom pixel sizes never get bleed added — they're assumed to already
+ *   be the print service's exact template size.
  */
-export async function renderCardToCanvas(card, canvas, side = 'front') {
+export async function renderCardToCanvas(card, canvas, side = 'front', { bleed = false } = {}) {
   const size = getCardSize(card);
   // Prefer the card's exact custom pixel dimensions when set, so rounding
   // from inches back to pixels can never drift off the requested size.
   const w = size.isCustom ? size.widthPx : size.width * INCH_TO_PX;
   const h = size.isCustom ? size.heightPx : size.height * INCH_TO_PX;
+  const bleedPx = (bleed && !size.isCustom) ? BLEED * INCH_TO_PX : 0;
 
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = Math.round(w + bleedPx * 2);
+  canvas.height = Math.round(h + bleedPx * 2);
   const ctx = canvas.getContext('2d');
-  
+
   // Clear canvas
-  ctx.clearRect(0, 0, w, h);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Shift the origin so (0,0)..(w,h) always maps to the trim box, exactly
+  // as if bleed didn't exist — every position below is unaffected.
+  ctx.save();
+  ctx.translate(bleedPx, bleedPx);
 
   await Promise.all([
     ensureFontLoaded(card.titleFont || 'Outfit'),
@@ -98,9 +117,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front') {
   ]);
 
   if (side === 'front') {
-    // 1. Draw Card Background
+    // 1. Draw Card Background (extends into the bleed border so a die-cut
+    // wobble never exposes a white sliver at the trim edge)
     ctx.fillStyle = card.bgColor || '#1e1e24';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
     // Draw Subtle Outer Glow Border or Frame
     ctx.strokeStyle = card.themeColor || '#6366f1';
@@ -445,19 +465,22 @@ export async function renderCardToCanvas(card, canvas, side = 'front') {
     if (card.cardBackImage) {
       const backImg = await loadImage(card.cardBackImage);
       if (backImg) {
-        ctx.drawImage(backImg, 0, 0, w, h);
-        
+        // Extend into the bleed border so the back matches the front's
+        // bleed treatment (no white sliver at the trim edge)
+        ctx.drawImage(backImg, -bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
+
         // Border over image
         ctx.strokeStyle = card.themeColor || '#6366f1';
         ctx.lineWidth = 0.08 * INCH_TO_PX;
         ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+        ctx.restore();
         return;
       }
     }
 
-    // Default premium geometric card back pattern
+    // Default premium geometric card back pattern (extends into bleed)
     ctx.fillStyle = card.bgColor || '#1e1e24';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
     // Thick border
     const borderThickness = 0.08 * INCH_TO_PX;
@@ -512,8 +535,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front') {
     ctx.fillStyle = card.themeColor || '#6366f1';
     ctx.fill();
 
-    ctx.restore();
+    ctx.restore(); // matches the inner save() above (mesh clip)
   }
+
+  ctx.restore(); // matches the outer save()/translate() at the top of this function
 }
 
 /**
@@ -575,17 +600,20 @@ export async function exportSheetsToPDF(sheets, onProgress = () => {}) {
 
 /**
  * Renders a single card face to a standalone PNG and triggers a browser
- * download. The output image is exactly the card's configured pixel size
- * (its custom pixel size if set, otherwise its preset size at 300 DPI) —
- * ready to upload directly to a print-on-demand service like The Game
- * Crafter, which requires exact pixel dimensions per card.
+ * download. For preset card types, the output automatically includes The
+ * Game Crafter's standard 0.125" bleed border beyond the trim edge (their
+ * card proofing template spec), so the file's pixel dimensions match what
+ * their upload system expects exactly — no unwanted stretching that would
+ * push your design past their safe zone. Custom pixel sizes are exported
+ * as-is, since they're assumed to already be the print service's exact
+ * template size (bleed included).
  *
  * @param {Object} card - The card template to render
  * @param {'front'|'back'} side - Which face to export
  */
 export async function exportCardToPNG(card, side = 'front') {
   const canvas = document.createElement('canvas');
-  await renderCardToCanvas(card, canvas, side);
+  await renderCardToCanvas(card, canvas, side, { bleed: true });
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) return;
