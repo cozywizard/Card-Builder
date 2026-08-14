@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { getCardSize, BLEED, SAFE_ZONE, CONTENT_INSET } from '../utils/binPacker.js';
+import { getCardSize, BLEED, SAFE_ZONE, CONTENT_INSET, CONTENT_PADDING } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
@@ -72,17 +72,25 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
   const safeInsetPctY = !sizeInfo.isCustom ? ((SAFE_ZONE - BLEED) / sizeInfo.height) * 100 : null;
   const guidesAvailable = safeInsetPctX != null;
 
-  // Content padding (header/art/description/footer) AND the trim border's
-  // own inset both need to clear the safe-zone guide above, in real pixels
-  // -- not the fixed 20px/8px the CSS used to hardcode, which only cleared
-  // it by coincidence for card types close to Poker width. `.card-preview-wrapper`
-  // always renders at a fixed 320px CSS width (see app.css), so CONTENT_INSET
-  // (a physical inch measurement, same one the PNG export uses) converts to
-  // px here via that fixed scale factor -- uniform in both axes since the
-  // preview box is never stretched off its own aspect ratio.
+  // Two separate insets, both needing to clear the safe-zone guide above,
+  // in real pixels -- not the fixed 20px/8px the CSS used to hardcode,
+  // which only cleared it by coincidence for card types close to Poker
+  // width. `.card-preview-wrapper` always renders at a fixed 320px CSS
+  // width (see app.css), so the physical inch measurements below (the same
+  // ones the PNG export uses) convert to px here via that fixed scale
+  // factor -- uniform in both axes since the preview box is never
+  // stretched off its own aspect ratio.
+  //   - trimInsetPx: where the decorative trim border itself sits.
+  //   - contentPaddingPx: where header/art/description/footer content
+  //     starts -- further in than the trim border so there's a visible
+  //     gap, rather than text/art sitting flush against (or painting
+  //     over) it.
   const PREVIEW_WIDTH_PX = 320;
-  const safeContentPaddingPx = !sizeInfo.isCustom
+  const trimInsetPx = !sizeInfo.isCustom
     ? CONTENT_INSET * (PREVIEW_WIDTH_PX / sizeInfo.width)
+    : 8;
+  const contentPaddingPx = !sizeInfo.isCustom
+    ? CONTENT_PADDING * (PREVIEW_WIDTH_PX / sizeInfo.width)
     : 20;
 
   // Font auto-scaling based on text lengths (Standard sizes only)
@@ -143,7 +151,8 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
           --card-art-icon-color: ${card.artIconColor || card.themeColor || '#6366f1'};
           --title-font: ${card.titleFont || 'Outfit'};
           --body-font: ${card.bodyFont || 'Inter'};
-          --card-safe-padding: ${safeContentPaddingPx}px;
+          --card-trim-inset: ${trimInsetPx}px;
+          --card-content-padding: ${contentPaddingPx}px;
         "
       >
         <!-- Glossy Overlay -->

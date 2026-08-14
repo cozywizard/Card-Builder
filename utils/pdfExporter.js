@@ -4,7 +4,7 @@
  * Uses jsPDF for rendering and a 300 DPI HTML Canvas for high fidelity.
  */
 
-import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED, CONTENT_INSET } from './binPacker.js';
+import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED, CONTENT_INSET, CONTENT_PADDING } from './binPacker.js';
 import { loadGoogleFont } from '../components/CardCreator.js';
 
 // DPI resolution for printing (shared with binPacker.js so custom pixel
@@ -209,7 +209,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    const textMargin = CONTENT_INSET * INCH_TO_PX;
+    // Content (title/art/description/footer) sits further in than the trim
+    // border itself (CONTENT_INSET, used below) so there's a visible gap
+    // instead of text/art touching the border.
+    const textMargin = CONTENT_PADDING * INCH_TO_PX;
     const titleY = textMargin;
     ctx.fillText(titleText, textMargin, titleY);
 
@@ -367,7 +370,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // has been uploaded -- so description/footer positioning lines up
       // with the preview either way.
       const artHeight = h * 0.45;
-      const artMargin = textMargin; // keep flush with the same safe content inset as everything else
+      const artMargin = textMargin; // same content padding as text -- sits inside the trim border, not flush against it
       const artY = headerBottomY;
       const artRadius = 0.06 * INCH_TO_PX;
       const frameW = w - (artMargin * 2);
