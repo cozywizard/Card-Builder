@@ -93,6 +93,13 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
     ? CONTENT_PADDING * (PREVIEW_WIDTH_PX / sizeInfo.width)
     : 20;
 
+  // Border thickness defaults to 2px (matching the old hardcoded trim
+  // border) when unset, but an explicit 0 (user wants no border) must be
+  // respected rather than falling back -- so this can't just be `|| 2`.
+  const borderWidthPx = card.borderWidth === undefined || card.borderWidth === null || card.borderWidth === ''
+    ? 2
+    : Number(card.borderWidth);
+
   // Font auto-scaling based on text lengths (Standard sizes only)
   const titleText = card.title || 'Untitled Card';
   const getTitleFontSize = () => {
@@ -153,6 +160,8 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
           --body-font: ${card.bodyFont || 'Inter'};
           --card-trim-inset: ${trimInsetPx}px;
           --card-content-padding: ${contentPaddingPx}px;
+          --card-border-color: ${card.borderColor || card.themeColor || '#6366f1'};
+          --card-border-width: ${borderWidthPx}px;
         "
       >
         <!-- Glossy Overlay -->

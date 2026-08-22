@@ -160,6 +160,18 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ensureFontLoaded(card.bodyFont || 'Inter')
   ]);
 
+  // Edge/trim border color and thickness are independently customizable
+  // from the accent color -- default matches the old hardcoded values when
+  // unset, but an explicit 0 thickness (user wants no border) must be
+  // respected. Thickness is scaled off the same 320px reference the live
+  // preview renders its CSS border at, so both card faces here match what's
+  // shown on screen. Shared by both the front trim and back border below.
+  const borderColorSetting = card.borderColor || card.themeColor || '#6366f1';
+  const borderWidthSetting = card.borderWidth === undefined || card.borderWidth === null || card.borderWidth === ''
+    ? 2
+    : Number(card.borderWidth);
+  const edgeBorderLineWidth = w * (borderWidthSetting / 320);
+
   if (side === 'front') {
     // 1. Draw Card Background (extends into the bleed border so a die-cut
     // wobble never exposes a white sliver at the trim edge)
@@ -180,10 +192,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     // so this curve reads as concentric with the card's outer edge instead
     // of a visibly tighter radius.
     const trimRadius = w * (16 / 320);
-    const trimLineWidth = w * (2 / 320);
+    const trimLineWidth = edgeBorderLineWidth;
     ctx.save();
     ctx.globalAlpha = 0.7;
-    ctx.strokeStyle = card.themeColor || '#6366f1';
+    ctx.strokeStyle = borderColorSetting;
     ctx.lineWidth = trimLineWidth;
     drawRoundedRect(
       ctx,
@@ -589,8 +601,8 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         // stroke width) so the border itself stays inside the safe zone,
         // same as the front's trim.
         const backBorderInset = CONTENT_INSET * INCH_TO_PX;
-        ctx.strokeStyle = card.themeColor || '#6366f1';
-        ctx.lineWidth = 0.08 * INCH_TO_PX;
+        ctx.strokeStyle = borderColorSetting;
+        ctx.lineWidth = edgeBorderLineWidth;
         ctx.strokeRect(backBorderInset, backBorderInset, w - backBorderInset * 2, h - backBorderInset * 2);
         ctx.restore();
         return;
@@ -601,12 +613,11 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillStyle = card.bgColor || '#1e1e24';
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-    // Thick border -- inset to CONTENT_INSET so it stays inside the safe
+    // Edge border -- inset to CONTENT_INSET so it stays inside the safe
     // zone rather than sitting flush against the trim edge.
-    const borderThickness = 0.08 * INCH_TO_PX;
     const borderInset = CONTENT_INSET * INCH_TO_PX;
-    ctx.strokeStyle = card.themeColor || '#6366f1';
-    ctx.lineWidth = borderThickness;
+    ctx.strokeStyle = borderColorSetting;
+    ctx.lineWidth = edgeBorderLineWidth;
     ctx.strokeRect(borderInset, borderInset, w - borderInset * 2, h - borderInset * 2);
 
     // Inner geometric mesh pattern

@@ -297,39 +297,76 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
               </div>
               
               <div>
-                <label class="input-label">Accent / Border</label>
+                <label class="input-label">Accent Color</label>
                 <div class="color-picker-input-wrapper">
-                  <input 
-                    type="color" 
-                    class="form-color-picker" 
+                  <input
+                    type="color"
+                    class="form-color-picker"
                     value=${card.themeColor || '#6366f1'}
                     onInput=${(e) => handleTextChange('themeColor', e.target.value)}
                   />
-                  <input 
-                    type="text" 
-                    class="form-text-input hex-input" 
+                  <input
+                    type="text"
+                    class="form-text-input hex-input"
                     value=${card.themeColor || '#6366f1'}
                     onInput=${(e) => handleTextChange('themeColor', e.target.value)}
                   />
                 </div>
+                <p class="input-hint-text">Used for icons, headline text, and other highlights.</p>
               </div>
-              
+
               <div>
                 <label class="input-label">Typography Color</label>
                 <div class="color-picker-input-wrapper">
-                  <input 
-                    type="color" 
-                    class="form-color-picker" 
+                  <input
+                    type="color"
+                    class="form-color-picker"
                     value=${card.textColor || '#ffffff'}
                     onInput=${(e) => handleTextChange('textColor', e.target.value)}
                   />
-                  <input 
-                    type="text" 
-                    class="form-text-input hex-input" 
+                  <input
+                    type="text"
+                    class="form-text-input hex-input"
                     value=${card.textColor || '#ffffff'}
                     onInput=${(e) => handleTextChange('textColor', e.target.value)}
                   />
                 </div>
+              </div>
+            </div>
+
+            <!-- Card Edge Border -->
+            <div class="form-group row-group">
+              <div>
+                <label class="input-label">Border Color</label>
+                <div class="color-picker-input-wrapper">
+                  <input
+                    type="color"
+                    class="form-color-picker"
+                    value=${card.borderColor || card.themeColor || '#6366f1'}
+                    onInput=${(e) => handleTextChange('borderColor', e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    class="form-text-input hex-input"
+                    value=${card.borderColor || card.themeColor || '#6366f1'}
+                    onInput=${(e) => handleTextChange('borderColor', e.target.value)}
+                  />
+                </div>
+                <p class="input-hint-text">Defaults to the accent color. Set your own to make the edge border independent.</p>
+              </div>
+
+              <div>
+                <label class="input-label">Border Thickness (px)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="12"
+                  step="0.5"
+                  class="form-text-input"
+                  value=${card.borderWidth ?? 2}
+                  onInput=${(e) => handleTextChange('borderWidth', e.target.value)}
+                />
+                <p class="input-hint-text">Thickness of the decorative trim line around the card edge.</p>
               </div>
             </div>
 

@@ -1050,7 +1050,7 @@ body {
   left: var(--card-trim-inset, 8px);
   right: var(--card-trim-inset, 8px);
   bottom: var(--card-trim-inset, 8px);
-  border: 2px solid var(--card-theme, #6366f1);
+  border: var(--card-border-width, 2px) solid var(--card-border-color, var(--card-theme, #6366f1));
   /* Matches `.card-inner-container`'s own 16px corner rounding so this
      border's curve reads as concentric with the outer card edge, instead
      of a visibly tighter/different radius. */
