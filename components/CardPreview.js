@@ -67,9 +67,13 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   // overlay: 0.125" bleed + a further 0.125" clearance inside the trim
   // line = 0.25" total from the outer file edge). Expressed as a % inset
   // from the card box edge since our on-screen card IS the trim box.
-  // Not meaningful for custom pixel sizes — we don't know their bleed spec.
-  const safeInsetPctX = !sizeInfo.isCustom ? ((SAFE_ZONE - BLEED) / sizeInfo.width) * 100 : null;
-  const safeInsetPctY = !sizeInfo.isCustom ? ((SAFE_ZONE - BLEED) / sizeInfo.height) * 100 : null;
+  // Custom pixel sizes resolve to physical inches too (getCardSize divides
+  // by the same fixed 300 DPI the PNG export uses), so this applies to them
+  // exactly the same as presets -- pdfExporter.js draws the trim border and
+  // content padding for custom sizes with the same unconditional inch-based
+  // math below, so the guide needs to match that, not opt out of it.
+  const safeInsetPctX = ((SAFE_ZONE - BLEED) / sizeInfo.width) * 100;
+  const safeInsetPctY = ((SAFE_ZONE - BLEED) / sizeInfo.height) * 100;
   const guidesAvailable = safeInsetPctX != null;
 
   // Two separate insets, both needing to clear the safe-zone guide above,
@@ -79,19 +83,17 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   // width (see app.css), so the physical inch measurements below (the same
   // ones the PNG export uses) convert to px here via that fixed scale
   // factor -- uniform in both axes since the preview box is never
-  // stretched off its own aspect ratio.
+  // stretched off its own aspect ratio. Applies to custom pixel sizes too
+  // (see safeInsetPct comment above) -- a flat 8px/20px fallback here would
+  // shrink to invisible on a large custom canvas instead of scaling with it.
   //   - trimInsetPx: where the decorative trim border itself sits.
   //   - contentPaddingPx: where header/art/description/footer content
   //     starts -- further in than the trim border so there's a visible
   //     gap, rather than text/art sitting flush against (or painting
   //     over) it.
   const PREVIEW_WIDTH_PX = 320;
-  const trimInsetPx = !sizeInfo.isCustom
-    ? CONTENT_INSET * (PREVIEW_WIDTH_PX / sizeInfo.width)
-    : 8;
-  const contentPaddingPx = !sizeInfo.isCustom
-    ? CONTENT_PADDING * (PREVIEW_WIDTH_PX / sizeInfo.width)
-    : 20;
+  const trimInsetPx = CONTENT_INSET * (PREVIEW_WIDTH_PX / sizeInfo.width);
+  const contentPaddingPx = CONTENT_PADDING * (PREVIEW_WIDTH_PX / sizeInfo.width);
 
   // Border thickness defaults to 2px (matching the old hardcoded trim
   // border) when unset, but an explicit 0 (user wants no border) must be
