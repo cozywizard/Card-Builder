@@ -732,9 +732,14 @@ export async function exportSheetsToPDF(sheets, onProgress = () => {}) {
 
 /**
  * Renders a single card face to a standalone PNG and triggers a browser
- * download. Deliberately rendered at the trim size only (no bleed) so the
- * file is pixel-for-pixel identical to the live preview — no bleed margin
- * inflating the canvas beyond what's shown on screen.
+ * download. Deliberately rendered at the card's own sizeInfo dimensions
+ * only (bleed: false -- no extra bleed margin added on top), so the file is
+ * pixel-for-pixel identical to the live preview. For most presets sizeInfo
+ * IS the trim size, so this is a true no-bleed export; for 'poker' and
+ * custom pixel sizes, sizeInfo's dimensions already have the print
+ * service's bleed border baked in (see CARD_SIZES' `bleedIncluded` flag /
+ * getBleedSize()'s comment), so the export comes out bleed-included without
+ * this function needing to add anything.
  *
  * @param {Object} card - The card template to render
  * @param {'front'|'back'} side - Which face to export

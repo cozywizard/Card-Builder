@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { getCardSize, BLEED, SAFE_ZONE, CONTENT_INSET, CONTENT_PADDING } from '../utils/binPacker.js';
+import { getCardSize, CONTENT_INSET, CONTENT_PADDING, getSafeZoneInsetIn } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
@@ -66,14 +66,13 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   // The Game Crafter print safe-zone guide (matches their card proofing
   // overlay: 0.125" bleed + a further 0.125" clearance inside the trim
   // line = 0.25" total from the outer file edge). Expressed as a % inset
-  // from the card box edge since our on-screen card IS the trim box.
-  // Custom pixel sizes resolve to physical inches too (getCardSize divides
-  // by the same fixed 300 DPI the PNG export uses), so this applies to them
-  // exactly the same as presets -- pdfExporter.js draws the trim border and
-  // content padding for custom sizes with the same unconditional inch-based
-  // math below, so the guide needs to match that, not opt out of it.
-  const safeInsetPctX = ((SAFE_ZONE - BLEED) / sizeInfo.width) * 100;
-  const safeInsetPctY = ((SAFE_ZONE - BLEED) / sizeInfo.height) * 100;
+  // from the card box edge -- getSafeZoneInsetIn accounts for whether
+  // sizeInfo's own box is the trim box (most presets) or already has the
+  // bleed border baked into it (poker, custom pixel sizes), since the
+  // inset from the box's own edge differs between the two.
+  const safeZoneInsetIn = getSafeZoneInsetIn(sizeInfo);
+  const safeInsetPctX = (safeZoneInsetIn / sizeInfo.width) * 100;
+  const safeInsetPctY = (safeZoneInsetIn / sizeInfo.height) * 100;
   const guidesAvailable = safeInsetPctX != null;
 
   // Two separate insets, both needing to clear the safe-zone guide above,

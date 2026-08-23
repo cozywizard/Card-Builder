@@ -11,7 +11,13 @@ export const MAX_WIDTH = SHEET_WIDTH - (MARGIN * 2); // 8.0" printable width
 export const MAX_HEIGHT = SHEET_HEIGHT - (MARGIN * 2); // 10.5" printable height
 
 export const CARD_SIZES = {
-  'poker': { name: 'Poker', width: 2.5, height: 3.5 },
+  // Poker is the one preset whose width/height are the FULL bleed-inclusive
+  // upload file size (825×1125px @ 300 DPI == The Game Crafter's required
+  // poker template), not the trim size like every other preset below --
+  // `bleedIncluded: true` flags that so safe-zone math (getSafeZoneInsetIn
+  // below) doesn't subtract BLEED a second time and draw the guide too
+  // close to the edge.
+  'poker': { name: 'Poker', width: 2.75, height: 3.75, bleedIncluded: true }, // 825×1125px @ 300 DPI
   'bridge': { name: 'Bridge', width: 2.25, height: 3.5 },
   'tarot': { name: 'Tarot', width: 2.75, height: 4.75 },
   'mini': { name: 'Mini', width: 1.75, height: 2.5 },
@@ -32,6 +38,26 @@ export const SAFE_ZONE = 0.25;   // inches from the bleed (outer file) edge that
 // Inset (from the trim edge, i.e. the live preview's own box / the export's
 // (0,0)-(w,h) trim-box coordinates) that the SAFE_ZONE line sits at.
 export const SAFE_ZONE_INSET = SAFE_ZONE - BLEED; // 0.125"
+
+/**
+ * Inset (in inches, from sizeInfo's own box edge) that the safe-zone
+ * proofing guide should be drawn at.
+ *
+ * SAFE_ZONE_INSET (SAFE_ZONE - BLEED) only holds when sizeInfo's box IS the
+ * trim box -- true for every CARD_SIZES preset except 'poker' (see its
+ * `bleedIncluded` flag above). For a box that already has the bleed border
+ * baked into its own dimensions (poker, and custom pixel sizes -- see
+ * getBleedSize()'s comment, they're assumed to already be a print service's
+ * exact template size), there's no separate bleed left to subtract: the
+ * safe line sits the full SAFE_ZONE distance in from that box's own edge.
+ * Getting this wrong draws the guide a whole BLEED (0.125") too close to
+ * the edge, so it no longer lines up with the print service's actual
+ * proofing overlay.
+ */
+export function getSafeZoneInsetIn(sizeInfo) {
+  if (sizeInfo && (sizeInfo.isCustom || sizeInfo.bleedIncluded)) return SAFE_ZONE;
+  return SAFE_ZONE_INSET;
+}
 
 // Inset the decorative trim border (and the plain card-back border) is
 // drawn at, in both the live preview and the exported PNG. Deliberately
