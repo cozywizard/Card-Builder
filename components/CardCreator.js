@@ -2,7 +2,7 @@ import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import IconPicker from './IconPicker.js';
-import { CARD_SIZES, getCardSize, getBleedSize, DPI, BLEED } from '../utils/binPacker.js';
+import { CARD_SIZES, getCardSize, DPI } from '../utils/binPacker.js';
 import { exportCardToPNG } from '../utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -150,10 +150,9 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
   };
 
   const sizeInfo = getCardSize(card);
-  const bleedInfo = getBleedSize(sizeInfo);
   const pngDimsLabel = sizeInfo.isCustom
     ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px`
-    : `${Math.round(bleedInfo.bleedWidth * DPI)}×${Math.round(bleedInfo.bleedHeight * DPI)}px`;
+    : `${Math.round(sizeInfo.width * DPI)}×${Math.round(sizeInfo.height * DPI)}px`;
 
   return html`
     <div class="creator-control-panel glass-panel">
@@ -197,7 +196,7 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                 })}
               </select>
               <p class="input-hint-text">
-                Finished (trim) size — the physical card size after cutting. PNG exports automatically add The Game Crafter's standard ${BLEED}" bleed border beyond this edge.
+                Finished (trim) size — the physical card size after cutting. PNG exports match this size exactly, pixel-for-pixel with the live preview (no bleed border added).
               </p>
             </div>
 
@@ -845,7 +844,7 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
           </button>
         </div>
         <p class="input-hint-text png-dims-hint">
-          Exports at ${pngDimsLabel}${!sizeInfo.isCustom ? ` — includes The Game Crafter's standard ${BLEED}" bleed border automatically` : ''}, exact pixel-for-pixel and ready to upload to print services like The Game Crafter.
+          Exports at ${pngDimsLabel}, matching the live preview exactly pixel-for-pixel (trim size, no bleed border).
         </p>
       </div>
 

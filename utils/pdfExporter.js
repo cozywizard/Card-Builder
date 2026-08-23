@@ -732,20 +732,16 @@ export async function exportSheetsToPDF(sheets, onProgress = () => {}) {
 
 /**
  * Renders a single card face to a standalone PNG and triggers a browser
- * download. For preset card types, the output automatically includes The
- * Game Crafter's standard 0.125" bleed border beyond the trim edge (their
- * card proofing template spec), so the file's pixel dimensions match what
- * their upload system expects exactly — no unwanted stretching that would
- * push your design past their safe zone. Custom pixel sizes are exported
- * as-is, since they're assumed to already be the print service's exact
- * template size (bleed included).
+ * download. Deliberately rendered at the trim size only (no bleed) so the
+ * file is pixel-for-pixel identical to the live preview — no bleed margin
+ * inflating the canvas beyond what's shown on screen.
  *
  * @param {Object} card - The card template to render
  * @param {'front'|'back'} side - Which face to export
  */
 export async function exportCardToPNG(card, side = 'front') {
   const canvas = document.createElement('canvas');
-  await renderCardToCanvas(card, canvas, side, { bleed: true });
+  await renderCardToCanvas(card, canvas, side);
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) return;
