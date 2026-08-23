@@ -6,7 +6,7 @@ import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
 
-export default function CardPreview({ card, forceSide = 'front', cardTypeDefaults = {} }) {
+export default function CardPreview({ card, forceSide = 'front', cardSizeDefaults = {} }) {
   const [side, setSide] = useState('front');
   const [showGuides, setShowGuides] = useState(true);
   const cardRef = useRef(null);
@@ -289,7 +289,7 @@ export default function CardPreview({ card, forceSide = 'front', cardTypeDefault
         <div class="card-face card-back">
           <!-- Background image or premium diamond lattice -->
           ${(() => {
-            const backImage = card.cardBackImage || (cardTypeDefaults && cardTypeDefaults[card.cardType]) || null;
+            const backImage = card.cardBackImage || (cardSizeDefaults && cardSizeDefaults[card.size]) || null;
             if (backImage) {
               return html`
                 <img src=${backImage} class="card-back-background" alt="Card Back" />

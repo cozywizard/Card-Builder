@@ -466,7 +466,7 @@ export default function CardSheetBuilder({
                   <div class="drawer-card-item glass-panel" onClick=${() => handleAddCardInstance(card)}>
                     <div class="drawer-card-meta">
                       <span class="drawer-card-title">${card.title}</span>
-                      <span class="drawer-card-size">${sizeInfo.isCustom ? 'Custom' : (card.cardType ? card.cardType.charAt(0).toUpperCase() + card.cardType.slice(1) : sizeInfo.name)} (${sizeInfo.isCustom ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px` : `${sizeInfo.width}" × ${sizeInfo.height}"`})</span>
+                      <span class="drawer-card-size">${sizeInfo.isCustom ? 'Custom' : sizeInfo.name} (${sizeInfo.isCustom ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px` : `${sizeInfo.width}" × ${sizeInfo.height}"`})</span>
                     </div>
                     <button class="primary-glow-btn mini-btn">Add Instance</button>
                   </div>

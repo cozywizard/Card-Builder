@@ -15,7 +15,7 @@ import * as localDB from './utils/db.js';
 import * as cloudDB from './utils/firestoreDB.js';
 import { auth, isFirebaseConfigured } from './utils/firebase.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import { packCards, getNextAvailablePosition, getCardSize } from './utils/binPacker.js';
+import { packCards, getNextAvailablePosition, getCardSize, CARD_SIZES } from './utils/binPacker.js';
 import { exportSheetsToPDF } from './utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -23,7 +23,6 @@ const html = htm.bind(h);
 const DEFAULT_CARD = {
   title: 'Eldritch Flame',
   size: 'poker',
-  cardType: 'attack',
   iconType: 'vector',
   iconId: 'flame',
   iconSvgPath: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3.5z',
@@ -81,10 +80,10 @@ function App() {
   // Theme state — persisted in localStorage, default dark
   const [theme, setTheme] = useState(() => localStorage.getItem('cardforge-theme') || 'dark');
 
-  // Per-card-type defaults (e.g., default back image). Persisted in localStorage.
-  const [cardTypeDefaults, setCardTypeDefaults] = useState(() => {
+  // Per-card-size defaults (e.g., default back image). Persisted in localStorage.
+  const [cardSizeDefaults, setCardSizeDefaults] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('cardforge-cardTypeDefaults') || '{}');
+      return JSON.parse(localStorage.getItem('cardforge-cardSizeDefaults') || '{}');
     } catch (e) {
       return {};
     }
@@ -96,25 +95,26 @@ function App() {
     localStorage.setItem('cardforge-theme', theme);
   }, [theme]);
 
-  // Persist card type defaults
+  // Persist card size defaults
   useEffect(() => {
     try {
-      localStorage.setItem('cardforge-cardTypeDefaults', JSON.stringify(cardTypeDefaults || {}));
+      localStorage.setItem('cardforge-cardSizeDefaults', JSON.stringify(cardSizeDefaults || {}));
     } catch (e) {
-      console.warn('Failed to persist cardTypeDefaults', e);
+      console.warn('Failed to persist cardSizeDefaults', e);
     }
-  }, [cardTypeDefaults]);
+  }, [cardSizeDefaults]);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
   
   // PDF Export loading state
   const [exportProgress, setExportProgress] = useState(null); // null or percentage (0-100)
 
-  // Normalize legacy cards that only store `size` (no `cardType`)
+  // Normalize legacy cards saved under the older attack/modifier/class
+  // card-type system, which had no explicit `size` field of its own.
   function normalizeCards(cards) {
     return cards.map(c => {
-      if (!c.cardType) {
-        return { ...c, cardType: c.size === 'large' ? 'class' : 'attack' };
+      if (!c.size || !CARD_SIZES[c.size]) {
+        return { ...c, size: c.cardType === 'class' ? 'large' : 'poker' };
       }
       return c;
     });
@@ -426,18 +426,18 @@ function App() {
       const row = rows[i];
       try {
         const title = row.title || row.Title || `Imported Card ${Date.now()}-${i}`;
-        let cardType = (row.cardType || row.CardType || row.type || row.Type || '').toString().toLowerCase();
-        if (!cardType) {
-          const sizeVal = (row.size || row.Size || '').toString().toLowerCase();
-          cardType = (sizeVal === 'large' || sizeVal === 'class') ? 'class' : 'attack';
+        let size = (row.size || row.Size || '').toString().toLowerCase();
+        if (!CARD_SIZES[size]) {
+          // Legacy fallback for CSVs still using the old cardtype column
+          const legacyType = (row.cardType || row.CardType || row.type || row.Type || '').toString().toLowerCase();
+          size = legacyType === 'class' ? 'large' : 'poker';
         }
 
         const cardObj = {
           ...DEFAULT_CARD,
           id: `card-${Date.now()}-${i}`,
           title: title,
-          cardType: cardType,
-          size: row.size || (cardType === 'class' ? 'large' : 'poker'),
+          size: size,
           headline: row.headline || row.Headline || DEFAULT_CARD.headline,
           description: row.description || row.Description || DEFAULT_CARD.description,
           bottomLeft: row.bottomLeft || row.BottomLeft || '',
@@ -620,7 +620,7 @@ function App() {
                 <span class="preview-hint">Move mouse over card for glowing 3D perspective</span>
               </div>
               
-              <${CardPreview} card=${currentCard} cardTypeDefaults=${cardTypeDefaults} />
+              <${CardPreview} card=${currentCard} cardSizeDefaults=${cardSizeDefaults} />
             </div>
           </div>
         `}
@@ -643,8 +643,8 @@ function App() {
               onAddCardToSheet=${handleAddCardToSheet}
               onBulkImport=${handleBulkImport}
               onGoToSheetBuilder=${() => setActiveTab('sheet-builder')}
-              cardTypeDefaults=${cardTypeDefaults}
-              setCardTypeDefaults=${setCardTypeDefaults}
+              cardSizeDefaults=${cardSizeDefaults}
+              setCardSizeDefaults=${setCardSizeDefaults}
             />
           </div>
         `}

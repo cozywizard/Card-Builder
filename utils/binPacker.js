@@ -65,7 +65,10 @@ export function getBleedSize(sizeInfo) {
   };
 }
 
-// Logical card types used in the app. These map to physical sizes above.
+// Legacy logical card types (attack/modifier/class) from an earlier version
+// of the app, which mapped each type to one fixed physical size. Cards are
+// now sized directly via CARD_SIZES/`card.size`; this is kept only to
+// resolve the size of old cards that still carry a `cardType` field.
 export const CARD_TYPES = {
   'attack': { name: 'Attack', sizeKey: 'poker' },
   'modifier': { name: 'Modifier', sizeKey: 'poker' },
@@ -109,8 +112,11 @@ export function getCardSize(card) {
     }
   }
 
+  if (card.size && CARD_SIZES[card.size]) return CARD_SIZES[card.size];
+  // Legacy fallback for cards saved under the older attack/modifier/class
+  // card-type system, which had no explicit `size` field of its own.
   if (card.cardType) return getSizeForType(card.cardType);
-  return CARD_SIZES[card.size] || CARD_SIZES['poker'];
+  return CARD_SIZES['poker'];
 }
 
 export function getNextAvailablePosition(existingItems, itemWidth, itemHeight, pageWidth = SHEET_WIDTH, pageHeight = SHEET_HEIGHT, margin = MARGIN) {

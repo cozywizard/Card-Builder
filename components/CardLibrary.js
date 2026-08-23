@@ -1,13 +1,13 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { CARD_TYPES, getCardSize } from '../utils/binPacker.js';
+import { CARD_SIZES, getCardSize } from '../utils/binPacker.js';
 import { fetchCsv, parseCsvToRows } from '../utils/googleSheets.js';
 import { exportCardToPNG } from '../utils/pdfExporter.js';
 
 const html = htm.bind(h);
 
-export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDeleteCard, onAddCardToSheet, onBulkImport, onGoToSheetBuilder, cardTypeDefaults, setCardTypeDefaults }) {
+export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDeleteCard, onAddCardToSheet, onBulkImport, onGoToSheetBuilder, cardSizeDefaults, setCardSizeDefaults }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [showImportModal, setShowImportModal] = useState(false);
@@ -27,7 +27,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
       (card.description && card.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (card.headline && card.headline.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesSize = typeFilter === 'all' || (card.cardType === typeFilter) || (card.size === typeFilter);
+    const matchesSize = typeFilter === 'all' || (card.size === typeFilter);
     
     return matchesSearch && matchesSize;
   });
@@ -56,18 +56,18 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
           >
             All Types
           </button>
-          ${Object.entries(CARD_TYPES).map(([key, val]) => html`
+          ${Object.entries(CARD_SIZES).map(([key, sz]) => html`
             <button
               class="filter-tab ${typeFilter === key ? 'active' : ''}"
               onClick=${() => setTypeFilter(key)}
             >
-              ${val.name}
+              ${sz.name}
             </button>
           `)}
 
           <div style="margin-left:12px; display:inline-flex; gap:8px;">
             <button class="lib-action-btn secondary-btn" onClick=${() => setShowImportModal(true)}>Import</button>
-            <button class="lib-action-btn secondary-btn" onClick=${() => setShowDefaultsEditor(true)}>Type Defaults</button>
+            <button class="lib-action-btn secondary-btn" onClick=${() => setShowDefaultsEditor(true)}>Size Defaults</button>
           </div>
         </div>
       </div>
@@ -89,7 +89,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
                 >
                   <div class="library-card-title-group">
                     <span class="lib-card-title" style="color: ${card.textColor || '#ffffff'}">${card.title}</span>
-                    <span class="lib-card-size">${(CARD_TYPES[card.cardType] && CARD_TYPES[card.cardType].name) || sizeInfo.name} • ${sizeInfo.isCustom ? `${sizeInfo.widthPx}x${sizeInfo.heightPx}px` : `${sizeInfo.width}"x${sizeInfo.height}"`}</span>
+                    <span class="lib-card-size">${sizeInfo.name} • ${sizeInfo.isCustom ? `${sizeInfo.widthPx}x${sizeInfo.heightPx}px` : `${sizeInfo.width}"x${sizeInfo.height}"`}</span>
                   </div>
                   <div class="lib-card-icon-indicator" style="color: ${card.themeColor || '#6366f1'}">
                     ${card.iconType === 'upload' && card.iconUpload ? html`
@@ -198,7 +198,7 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
             <h3>Import Cards from CSV</h3>
             ${!importAllRows.length && !importSuccess && html`
               <div>
-                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">Expected columns: <code style="font-size:0.8rem; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:3px;">title, cardtype, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid, cardart, cardbackimage</code></p>
+                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">Expected columns: <code style="font-size:0.8rem; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:3px;">title, size, description, headline, bottomleft, bottomright, bgcolor, textcolor, themecolor, iconid, cardart, cardbackimage</code></p>
 
                 <!-- Tab switcher -->
                 <div style="display:flex; gap:0; border:1px solid var(--border-color); border-radius:6px; overflow:hidden; margin-bottom:14px; width:fit-content;">
@@ -366,14 +366,14 @@ export default function CardLibrary({ cards, onEditCard, onDuplicateCard, onDele
       ${showDefaultsEditor && html`
         <div class="modal-overlay z-index-top">
           <div class="modal-content glass-panel import-modal">
-            <h3>Card Type Defaults</h3>
-            <p>Set a default back image URL for each card type. Cards without an explicit back will use these.</p>
-            ${Object.entries(CARD_TYPES).map(([key, val]) => html`
+            <h3>Card Size Defaults</h3>
+            <p>Set a default back image URL for each card size. Cards without an explicit back will use these.</p>
+            ${Object.entries(CARD_SIZES).map(([key, sz]) => html`
               <div style="margin-bottom:8px;">
-                <label class="input-label">${val.name} Back Image URL</label>
-                <input type="text" class="form-text-input" value=${(cardTypeDefaults && cardTypeDefaults[key]) || ''} onInput=${(e) => {
+                <label class="input-label">${sz.name} Back Image URL</label>
+                <input type="text" class="form-text-input" value=${(cardSizeDefaults && cardSizeDefaults[key]) || ''} onInput=${(e) => {
                   const v = e.target.value;
-                  setCardTypeDefaults(prev => ({ ...(prev||{}), [key]: v }));
+                  setCardSizeDefaults(prev => ({ ...(prev||{}), [key]: v }));
                 }} />
               </div>
             `)}
