@@ -351,17 +351,20 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
               </div>
 
               <div>
-                <label class="input-label">Border Thickness (px)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="20"
-                  step="0.5"
-                  class="form-text-input"
-                  value=${card.borderWidth ?? 2}
-                  onInput=${(e) => handleTextChange('borderWidth', e.target.value)}
-                />
-                <p class="input-hint-text">Thickness of the border drawn flush against the card's outer edge, matching The Game Crafter's "Border Area" guide. They advise against thin borders — trim drift can shift up to 1/8", so a thin one may look uneven after cutting. Set to 0 for no border.</p>
+                <label class="input-label">Border</label>
+                <div class="icon-toggle-row">
+                  <button
+                    type="button"
+                    class="toggle-choice-btn ${card.borderEnabled !== false ? 'active' : ''}"
+                    onClick=${() => handleTextChange('borderEnabled', true)}
+                  >On</button>
+                  <button
+                    type="button"
+                    class="toggle-choice-btn ${card.borderEnabled === false ? 'active' : ''}"
+                    onClick=${() => handleTextChange('borderEnabled', false)}
+                  >Off</button>
+                </div>
+                <p class="input-hint-text">When on, the border always spans from the card's outer edge to the print-safe zone line — matching The Game Crafter's "Border Area" guide exactly, so it's no longer a manual thickness to get wrong.</p>
               </div>
             </div>
 

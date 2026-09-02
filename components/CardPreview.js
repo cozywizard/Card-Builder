@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { getCardSize, BORDER_INSET, CONTENT_PADDING, getSafeZoneInsetIn } from '../utils/binPacker.js';
+import { getCardSize, BORDER_INSET, getBorderWidthIn, getContentInsetIn, getSafeZoneInsetIn } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
@@ -93,15 +93,17 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   //     starts -- further in than the border so there's a visible gap,
   //     rather than text/art sitting flush against (or painting over) it.
   const PREVIEW_WIDTH_PX = 320;
-  const trimInsetPx = BORDER_INSET * (PREVIEW_WIDTH_PX / sizeInfo.width);
-  const contentPaddingPx = CONTENT_PADDING * (PREVIEW_WIDTH_PX / sizeInfo.width);
+  const previewScale = PREVIEW_WIDTH_PX / sizeInfo.width;
+  const trimInsetPx = BORDER_INSET * previewScale;
+  const contentPaddingPx = getContentInsetIn(sizeInfo) * previewScale;
 
-  // Border thickness defaults to 2px (matching the old hardcoded trim
-  // border) when unset, but an explicit 0 (user wants no border) must be
-  // respected rather than falling back -- so this can't just be `|| 2`.
-  const borderWidthPx = card.borderWidth === undefined || card.borderWidth === null || card.borderWidth === ''
-    ? 2
-    : Number(card.borderWidth);
+  // Border thickness is no longer user-adjustable -- The Game Crafter's
+  // template requires it to span the full trim-edge-to-safe-zone-line gap
+  // (getBorderWidthIn) or not exist at all, so a thin/oversized border
+  // never gets drawn. `borderEnabled` defaults to true (a border shows
+  // unless explicitly turned off) to match the previous default appearance.
+  const borderEnabled = card.borderEnabled !== false;
+  const borderWidthPx = borderEnabled ? getBorderWidthIn(sizeInfo) * previewScale : 0;
 
   // Font auto-scaling based on text lengths (Standard sizes only)
   const titleText = card.title || 'Untitled Card';

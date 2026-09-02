@@ -60,23 +60,44 @@ export function getSafeZoneInsetIn(sizeInfo) {
 }
 
 // Inset the decorative edge border (and the plain card-back border) is
-// drawn at, in both the live preview and the exported PNG: 0, i.e. flush
-// against the trim edge. This matches The Game Crafter's own card template
-// guide, whose "Border Area" callout starts right at the trim line -- "if
-// you want a border around the edge of your card, you will want it to
-// extend the width of this guide on each side" -- rather than floating
-// somewhere inside the safe zone. A border drawn inset from the edge (as
-// this used to be, at 0.2") leaves a gap of exposed background between the
-// trim line and the border itself, which doesn't match their guide and
-// isn't what "a border around the edge" means. Border *thickness* is still
-// user-controlled (card.borderWidth); this only fixes where it starts.
+// drawn at: 0, i.e. flush against the trim edge. This matches The Game
+// Crafter's own card template guide, whose "Border Area" callout starts
+// right at the trim line, not floating somewhere inside the safe zone.
 export const BORDER_INSET = 0; // inches
 
-// Inset title/art/description/footer content is drawn at -- clear of both
-// the edge border above and the dashed safe-zone guide (SAFE_ZONE_INSET),
-// so there's a visible gap instead of text/art sitting flush against (or
-// past) either one.
-export const CONTENT_PADDING = 0.3; // inches
+/**
+ * Width (in inches, from sizeInfo's own box edge) that the decorative edge
+ * border is drawn at when enabled -- NOT user-adjustable. Per The Game
+ * Crafter's template, "the minimum recommended border area... if you want a
+ * border around the edge of your card, you will want it to extend the
+ * width of this guide" -- i.e. the border, when used, must span the full
+ * gap from the trim edge to the safe-zone line, not stop short of it (too
+ * thin to survive drift) or run past it (eating into the safe zone). Reuses
+ * getSafeZoneInsetIn since that gap IS the safe-zone inset by definition.
+ */
+export function getBorderWidthIn(sizeInfo) {
+  return getSafeZoneInsetIn(sizeInfo);
+}
+
+// Extra clearance (in inches) kept between the safe-zone line -- where the
+// edge border above now ends -- and where actual content starts. Content
+// was previously inset a flat 0.3" regardless of card size, which only
+// happened to clear the safe line by coincidence (exactly for Poker/custom,
+// generously for everything else). Now that the border always fills right
+// up to the safe line, content needs a deliberate, size-aware gap past it
+// instead of a flat guess.
+export const CONTENT_BUFFER = 0.08; // inches
+
+/**
+ * Inset (in inches, from sizeInfo's own box edge) that title/art/
+ * description/footer content is drawn at -- clear of both the edge border
+ * (which now fills up to the safe-zone line) and the dashed safe-zone guide
+ * itself, so there's a visible gap instead of text/art sitting flush
+ * against (or past) either one.
+ */
+export function getContentInsetIn(sizeInfo) {
+  return getSafeZoneInsetIn(sizeInfo) + CONTENT_BUFFER;
+}
 
 /**
  * Given a trim-size sizeInfo (as returned by getCardSize), returns the
