@@ -1040,16 +1040,14 @@ body {
 
 .card-inner-trim {
   position: absolute;
-  /* Inset just enough to clear the safe-zone guide -- was a fixed 8px,
-     which sat outside the guide instead of inside it (the guide is a
-     percentage of card size; 8px only happened to clear it for
-     poker-width cards). Deliberately smaller than --card-content-padding
-     above so content sits inside this border with a gap, not flush
-     against it. */
-  top: var(--card-trim-inset, 8px);
-  left: var(--card-trim-inset, 8px);
-  right: var(--card-trim-inset, 8px);
-  bottom: var(--card-trim-inset, 8px);
+  /* Flush against the trim edge (0 inset) -- matches The Game Crafter's own
+     card template guide, whose "Border Area" starts right at the trim
+     line, not floating inside the safe zone. See BORDER_INSET in
+     binPacker.js. */
+  top: var(--card-trim-inset, 0);
+  left: var(--card-trim-inset, 0);
+  right: var(--card-trim-inset, 0);
+  bottom: var(--card-trim-inset, 0);
   border: var(--card-border-width, 2px) solid var(--card-border-color, var(--card-theme, #6366f1));
   /* Matches `.card-inner-container`'s own 16px corner rounding so this
      border's curve reads as concentric with the outer card edge, instead

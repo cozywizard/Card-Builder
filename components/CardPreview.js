@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { getCardSize, CONTENT_INSET, CONTENT_PADDING, getSafeZoneInsetIn } from '../utils/binPacker.js';
+import { getCardSize, BORDER_INSET, CONTENT_PADDING, getSafeZoneInsetIn } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
@@ -85,13 +85,15 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   // stretched off its own aspect ratio. Applies to custom pixel sizes too
   // (see safeInsetPct comment above) -- a flat 8px/20px fallback here would
   // shrink to invisible on a large custom canvas instead of scaling with it.
-  //   - trimInsetPx: where the decorative trim border itself sits.
+  //   - trimInsetPx: where the decorative edge border itself sits -- flush
+  //     against the trim edge (BORDER_INSET is 0), matching The Game
+  //     Crafter's own "Border Area" guide, which starts right at the trim
+  //     line rather than floating inside the safe zone.
   //   - contentPaddingPx: where header/art/description/footer content
-  //     starts -- further in than the trim border so there's a visible
-  //     gap, rather than text/art sitting flush against (or painting
-  //     over) it.
+  //     starts -- further in than the border so there's a visible gap,
+  //     rather than text/art sitting flush against (or painting over) it.
   const PREVIEW_WIDTH_PX = 320;
-  const trimInsetPx = CONTENT_INSET * (PREVIEW_WIDTH_PX / sizeInfo.width);
+  const trimInsetPx = BORDER_INSET * (PREVIEW_WIDTH_PX / sizeInfo.width);
   const contentPaddingPx = CONTENT_PADDING * (PREVIEW_WIDTH_PX / sizeInfo.width);
 
   // Border thickness defaults to 2px (matching the old hardcoded trim

@@ -59,18 +59,23 @@ export function getSafeZoneInsetIn(sizeInfo) {
   return SAFE_ZONE_INSET;
 }
 
-// Inset the decorative trim border (and the plain card-back border) is
-// drawn at, in both the live preview and the exported PNG. Deliberately
-// larger than SAFE_ZONE_INSET (not just equal to it) so the border reads as
-// clearly *inside* the dashed safe-zone guide with real breathing room,
-// including clearing the guide's own rounded corners near the card's
-// corners, rather than sitting flush against (or past) the line.
-export const CONTENT_INSET = 0.2; // inches
+// Inset the decorative edge border (and the plain card-back border) is
+// drawn at, in both the live preview and the exported PNG: 0, i.e. flush
+// against the trim edge. This matches The Game Crafter's own card template
+// guide, whose "Border Area" callout starts right at the trim line -- "if
+// you want a border around the edge of your card, you will want it to
+// extend the width of this guide on each side" -- rather than floating
+// somewhere inside the safe zone. A border drawn inset from the edge (as
+// this used to be, at 0.2") leaves a gap of exposed background between the
+// trim line and the border itself, which doesn't match their guide and
+// isn't what "a border around the edge" means. Border *thickness* is still
+// user-controlled (card.borderWidth); this only fixes where it starts.
+export const BORDER_INSET = 0; // inches
 
-// Inset title/art/description/footer content is drawn at -- further in
-// than CONTENT_INSET so there's a visible gap between the trim border and
-// the content, instead of both sitting flush against each other (text
-// touching the border, the art frame's background painting over it).
+// Inset title/art/description/footer content is drawn at -- clear of both
+// the edge border above and the dashed safe-zone guide (SAFE_ZONE_INSET),
+// so there's a visible gap instead of text/art sitting flush against (or
+// past) either one.
 export const CONTENT_PADDING = 0.3; // inches
 
 /**

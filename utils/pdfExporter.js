@@ -4,7 +4,7 @@
  * Uses jsPDF for rendering and a 300 DPI HTML Canvas for high fidelity.
  */
 
-import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED, CONTENT_INSET, CONTENT_PADDING } from './binPacker.js';
+import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED, BORDER_INSET, CONTENT_PADDING } from './binPacker.js';
 import { loadGoogleFont } from '../components/CardCreator.js';
 
 // DPI resolution for printing (shared with binPacker.js so custom pixel
@@ -178,16 +178,13 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillStyle = card.bgColor || '#1e1e24';
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-    // Draw Card Inner Trim -- matches the live preview's `.card-inner-trim`:
-    // a thin, rounded, semi-transparent border. Its inset is CONTENT_INSET
-    // (a fixed physical measurement, same as every other margin below) --
-    // NOT proportional to card width like the old `w * (8/320)` -- because
-    // the safe zone it needs to clear is itself a fixed 0.125" from the
-    // trim edge regardless of card size. A proportional inset shrank right
-    // along with narrower card types (e.g. Bridge/Business/Mini) until it
-    // sat outside the safe zone instead of inside it. Radius/stroke weight
-    // stay proportional to width -- purely cosmetic, not a safety concern.
-    const trimInset = CONTENT_INSET * INCH_TO_PX;
+    // Draw Card Edge Border -- matches the live preview's `.card-inner-trim`:
+    // a rounded, semi-transparent border flush against the trim edge
+    // (BORDER_INSET is 0), same as The Game Crafter's own "Border Area"
+    // guide, which starts right at the trim line rather than floating
+    // inside the safe zone. Radius/stroke weight stay proportional to
+    // width -- purely cosmetic, not a safety concern.
+    const trimInset = BORDER_INSET * INCH_TO_PX;
     // Matches `.card-inner-container`'s 16px corner rounding (see app.css)
     // so this curve reads as concentric with the card's outer edge instead
     // of a visibly tighter radius.
@@ -224,9 +221,9 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    // Content (title/art/description/footer) sits further in than the trim
-    // border itself (CONTENT_INSET, used below) so there's a visible gap
-    // instead of text/art touching the border.
+    // Content (title/art/description/footer) sits further in than the edge
+    // border itself (BORDER_INSET + its thickness, used below) so there's a
+    // visible gap instead of text/art touching the border.
     const textMargin = CONTENT_PADDING * INCH_TO_PX;
     const titleY = textMargin;
     ctx.fillText(titleText, textMargin, titleY);
@@ -597,13 +594,19 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         // bleed treatment (no white sliver at the trim edge)
         ctx.drawImage(backImg, -bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-        // Border over image -- inset to CONTENT_INSET (not just half its own
-        // stroke width) so the border itself stays inside the safe zone,
-        // same as the front's trim.
-        const backBorderInset = CONTENT_INSET * INCH_TO_PX;
+        // Border over image -- flush against the trim edge (BORDER_INSET is
+        // 0), same as the front's edge border. Offset the stroke path by
+        // half its own width (and shrink the rect by the full width) so the
+        // whole stroke lands inside the trim box instead of straddling it.
+        const backBorderInset = BORDER_INSET * INCH_TO_PX;
         ctx.strokeStyle = borderColorSetting;
         ctx.lineWidth = edgeBorderLineWidth;
-        ctx.strokeRect(backBorderInset, backBorderInset, w - backBorderInset * 2, h - backBorderInset * 2);
+        ctx.strokeRect(
+          backBorderInset + edgeBorderLineWidth / 2,
+          backBorderInset + edgeBorderLineWidth / 2,
+          w - backBorderInset * 2 - edgeBorderLineWidth,
+          h - backBorderInset * 2 - edgeBorderLineWidth
+        );
         ctx.restore();
         return;
       }
@@ -613,12 +616,18 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillStyle = card.bgColor || '#1e1e24';
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-    // Edge border -- inset to CONTENT_INSET so it stays inside the safe
-    // zone rather than sitting flush against the trim edge.
-    const borderInset = CONTENT_INSET * INCH_TO_PX;
+    // Edge border -- flush against the trim edge (BORDER_INSET is 0),
+    // matching The Game Crafter's "Border Area" guide. Same half-width
+    // stroke offset as above so it lands fully inside the trim box.
+    const borderInset = BORDER_INSET * INCH_TO_PX;
     ctx.strokeStyle = borderColorSetting;
     ctx.lineWidth = edgeBorderLineWidth;
-    ctx.strokeRect(borderInset, borderInset, w - borderInset * 2, h - borderInset * 2);
+    ctx.strokeRect(
+      borderInset + edgeBorderLineWidth / 2,
+      borderInset + edgeBorderLineWidth / 2,
+      w - borderInset * 2 - edgeBorderLineWidth,
+      h - borderInset * 2 - edgeBorderLineWidth
+    );
 
     // Inner geometric mesh pattern
     ctx.save();
