@@ -105,6 +105,18 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   const borderEnabled = card.borderEnabled !== false;
   const borderWidthPx = borderEnabled ? getBorderWidthIn(sizeInfo) * previewScale : 0;
 
+  // `.card-inner-trim`'s inner curve is the browser's outer border-radius
+  // minus its own border-width (floored at 0) -- so a plain 16px radius
+  // (matching `.card-face`'s own corner) goes square on the inside once the
+  // border is thicker than that. Asking for (SAFE_ZONE_RADIUS_PX + border
+  // width) as the outer radius makes that same subtraction land back on
+  // exactly SAFE_ZONE_RADIUS_PX, matching `.print-safe-zone-guide`'s own
+  // rounding. Floored at CARD_OUTER_RADIUS_PX so a thin/zero-width border
+  // never asks for an outer curve tighter than the card's own corner.
+  const CARD_OUTER_RADIUS_PX = 16;
+  const SAFE_ZONE_RADIUS_PX = 10;
+  const trimRadiusPx = Math.max(CARD_OUTER_RADIUS_PX, SAFE_ZONE_RADIUS_PX + borderWidthPx);
+
   // Font auto-scaling based on text lengths (Standard sizes only)
   const titleText = card.title || 'Untitled Card';
   const getTitleFontSize = () => {
@@ -167,6 +179,7 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
           --card-content-padding: ${contentPaddingPx}px;
           --card-border-color: ${card.borderColor || card.themeColor || '#6366f1'};
           --card-border-width: ${borderWidthPx}px;
+          --card-trim-radius: ${trimRadiusPx}px;
         "
       >
         <!-- Glossy Overlay -->

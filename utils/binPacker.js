@@ -10,6 +10,13 @@ export const MARGIN = 0.25; // 0.25" printer safety margins
 export const MAX_WIDTH = SHEET_WIDTH - (MARGIN * 2); // 8.0" printable width
 export const MAX_HEIGHT = SHEET_HEIGHT - (MARGIN * 2); // 10.5" printable height
 
+// Fixed rendering resolution (pixels per inch) shared by the live preview,
+// the print-sheet PDF export, and single-card PNG export. Declared up here
+// (rather than further down where it's more topically at home, next to
+// getCardSize) because BORDER_EXTRA_IN below needs it to convert a pixel
+// measurement to inches at module-load time.
+export const DPI = 300;
+
 export const CARD_SIZES = {
   // Poker is the one preset whose width/height are the FULL bleed-inclusive
   // upload file size (825×1125px @ 300 DPI == The Game Crafter's required
@@ -65,38 +72,48 @@ export function getSafeZoneInsetIn(sizeInfo) {
 // right at the trim line, not floating somewhere inside the safe zone.
 export const BORDER_INSET = 0; // inches
 
+// Requested explicitly: the border should reach past the safe-zone line,
+// not just stop flush against it -- 50px measured in the same 300dpi print
+// pixel space as the exported file (matching how every other pixel figure
+// in this app -- and The Game Crafter's own template docs -- are quoted).
+// Poker-only: on physically smaller sizes (Mini, Business Card, Bridge,
+// Square) a flat 50px eats a much bigger share of the card and the header/
+// footer content has nowhere left to go -- text overlapping the icon and
+// footer tags in both the live preview and the export. Scoped to Poker,
+// where it was actually requested and verified, rather than applied
+// everywhere and silently breaking the smaller sizes.
+export const BORDER_EXTRA_PX = 50;
+export const BORDER_EXTRA_IN = BORDER_EXTRA_PX / DPI; // ~0.167"
+
 /**
  * Width (in inches, from sizeInfo's own box edge) that the decorative edge
  * border is drawn at when enabled -- NOT user-adjustable. Per The Game
- * Crafter's template, "the minimum recommended border area... if you want a
- * border around the edge of your card, you will want it to extend the
- * width of this guide" -- i.e. the border, when used, must span the full
- * gap from the trim edge to the safe-zone line, not stop short of it (too
- * thin to survive drift) or run past it (eating into the safe zone). Reuses
- * getSafeZoneInsetIn since that gap IS the safe-zone inset by definition.
+ * Crafter's template, the border must span at least the full gap from the
+ * trim edge to the safe-zone line so it can't be too thin to survive
+ * drift; on Poker specifically, BORDER_EXTRA_IN then carries it another
+ * 50px past that line, into the safe zone itself, per explicit request.
  */
 export function getBorderWidthIn(sizeInfo) {
-  return getSafeZoneInsetIn(sizeInfo);
+  const isPoker = sizeInfo && sizeInfo.name === 'Poker';
+  return getSafeZoneInsetIn(sizeInfo) + (isPoker ? BORDER_EXTRA_IN : 0);
 }
 
-// Extra clearance (in inches) kept between the safe-zone line -- where the
-// edge border above now ends -- and where actual content starts. Content
-// was previously inset a flat 0.3" regardless of card size, which only
-// happened to clear the safe line by coincidence (exactly for Poker/custom,
-// generously for everything else). Now that the border always fills right
-// up to the safe line, content needs a deliberate, size-aware gap past it
-// instead of a flat guess.
+// Extra clearance (in inches) kept between the edge border's own inner
+// edge and where actual content starts, so there's a visible gap instead
+// of text/art sitting flush against (or under) the border.
 export const CONTENT_BUFFER = 0.08; // inches
 
 /**
  * Inset (in inches, from sizeInfo's own box edge) that title/art/
- * description/footer content is drawn at -- clear of both the edge border
- * (which now fills up to the safe-zone line) and the dashed safe-zone guide
- * itself, so there's a visible gap instead of text/art sitting flush
- * against (or past) either one.
+ * description/footer content is drawn at -- clear of the edge border,
+ * which now reaches past the safe-zone line (see getBorderWidthIn), so
+ * content is measured from the border's own actual reach rather than the
+ * safe-zone line itself. Content would otherwise end up drawn underneath
+ * the border once the border got wider than content's old, independent
+ * inset.
  */
 export function getContentInsetIn(sizeInfo) {
-  return getSafeZoneInsetIn(sizeInfo) + CONTENT_BUFFER;
+  return getBorderWidthIn(sizeInfo) + CONTENT_BUFFER;
 }
 
 /**
@@ -133,10 +150,6 @@ export function getSizeForType(cardType) {
   if (!type) return CARD_SIZES['poker'];
   return CARD_SIZES[type.sizeKey] || CARD_SIZES['poker'];
 }
-
-// Fixed rendering resolution (pixels per inch) shared by the live preview,
-// the print-sheet PDF export, and single-card PNG export.
-export const DPI = 300;
 
 /**
  * Resolves the working width/height (in inches) for a card.

@@ -1049,10 +1049,17 @@ body {
   right: var(--card-trim-inset, 0);
   bottom: var(--card-trim-inset, 0);
   border: var(--card-border-width, 2px) solid var(--card-border-color, var(--card-theme, #6366f1));
-  /* Matches `.card-inner-container`'s own 16px corner rounding so this
-     border's curve reads as concentric with the outer card edge, instead
-     of a visibly tighter/different radius. */
-  border-radius: 16px;
+  /* The browser derives this border's INNER curve by shrinking the outer
+     radius by the border's own thickness (floored at 0) -- so with a thick
+     border (it now spans clear to the safe-zone line) and a plain 16px
+     outer radius, the inner curve collapses to a sharp corner. --card-trim-
+     radius is computed in CardPreview.js as (10px + border thickness) so
+     that after that same shrink, the inner curve comes out to exactly
+     10px -- matching `.print-safe-zone-guide`'s own rounding below. The
+     outer curve just ends up rounder than the card's 16px corner, which
+     is invisible since `.card-face` below clips overflow to its own 16px
+     radius anyway. */
+  border-radius: var(--card-trim-radius, 16px);
   pointer-events: none;
   opacity: 0.7;
 }

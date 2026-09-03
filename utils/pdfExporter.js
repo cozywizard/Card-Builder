@@ -103,10 +103,11 @@ function wrapCanvasText(ctx, text, maxWidth) {
 }
 
 /**
- * Helper to draw a rounded rectangle
+ * Traces a rounded-rect path onto the current subpath, without starting or
+ * closing the overall path -- lets callers combine several rounded rects
+ * into one multi-subpath shape (e.g. an evenodd-filled ring).
  */
-function drawRoundedRect(ctx, x, y, width, height, radius) {
-  ctx.beginPath();
+function traceRoundedRect(ctx, x, y, width, height, radius) {
   ctx.moveTo(x + radius, y);
   ctx.lineTo(x + width - radius, y);
   ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
@@ -117,6 +118,34 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
   ctx.lineTo(x, y + radius);
   ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
+}
+
+/**
+ * Helper to draw a rounded rectangle
+ */
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  traceRoundedRect(ctx, x, y, width, height, radius);
+}
+
+/**
+ * Fills a rounded-corner ring (outer rounded rect minus an inset inner
+ * rounded rect) -- used for the edge border, which now needs independently
+ * controlled outer/inner corner radii: the outer curve matches the card's
+ * own corner rounding, while the inner curve (at the border's inner edge,
+ * `thickness` in from each side) matches the safe-zone guide's rounding.
+ * A plain centered stroke can't do this -- its inner curve is always the
+ * same radius as its outer one, which goes visibly square once the stroke
+ * is thicker than that shared radius.
+ */
+function fillRoundedRing(ctx, x, y, width, height, outerRadius, thickness, innerRadius, fillStyle) {
+  ctx.save();
+  ctx.beginPath();
+  traceRoundedRect(ctx, x, y, width, height, outerRadius);
+  traceRoundedRect(ctx, x + thickness, y + thickness, width - thickness * 2, height - thickness * 2, innerRadius);
+  ctx.fillStyle = fillStyle;
+  ctx.fill('evenodd');
+  ctx.restore();
 }
 
 /**
@@ -180,28 +209,24 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     // Draw Card Edge Border -- matches the live preview's `.card-inner-trim`:
     // a rounded, semi-transparent border flush against the trim edge
     // (BORDER_INSET is 0), filling the full gap to the safe-zone line, same
-    // as The Game Crafter's own "Border Area" guide. Radius stays
-    // proportional to width -- purely cosmetic, not a safety concern.
+    // as The Game Crafter's own "Border Area" guide. Filled as a ring (not
+    // a centered stroke) so the outer curve can match the card's own 16px
+    // corner while the inner curve independently matches the safe-zone
+    // guide's 10px corner -- a stroke's inner/outer curves are always the
+    // same radius, which goes square on the inside once the border is
+    // thicker than that shared radius.
     if (edgeBorderLineWidth > 0) {
       const trimInset = BORDER_INSET * INCH_TO_PX;
-      // Matches `.card-inner-container`'s 16px corner rounding (see
-      // app.css) so this curve reads as concentric with the card's outer
-      // edge instead of a visibly tighter radius.
-      const trimRadius = w * (16 / 320);
-      const trimLineWidth = edgeBorderLineWidth;
+      const outerRadius = w * (16 / 320);
+      const innerRadius = w * (10 / 320);
       ctx.save();
       ctx.globalAlpha = 0.7;
-      ctx.strokeStyle = borderColorSetting;
-      ctx.lineWidth = trimLineWidth;
-      drawRoundedRect(
+      fillRoundedRing(
         ctx,
-        trimInset + trimLineWidth / 2,
-        trimInset + trimLineWidth / 2,
-        w - trimInset * 2 - trimLineWidth,
-        h - trimInset * 2 - trimLineWidth,
-        trimRadius
+        trimInset, trimInset, w - trimInset * 2, h - trimInset * 2,
+        outerRadius, edgeBorderLineWidth, innerRadius,
+        borderColorSetting
       );
-      ctx.stroke();
       ctx.restore();
     }
 
@@ -211,20 +236,35 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillStyle = card.textColor || '#ffffff';
     const titleFont = card.titleFont || 'Outfit';
 
-    // Auto-scale title font based on title length
+    // Content (title/art/description/footer) sits further in than the edge
+    // border (which now reaches past the safe-zone line) so there's a
+    // visible gap instead of text/art touching the border.
+    const textMargin = getContentInsetIn(size) * INCH_TO_PX;
+
+    // Auto-scale title font based on title length, then keep shrinking if
+    // it still doesn't clear the header icon (if any). The char-count
+    // heuristic alone doesn't know how wide textMargin (or the icon
+    // reserve) actually are, so on its own it can under-shrink and run
+    // title text into the icon once the content margin grows -- e.g. a
+    // wider edge border eating further into the available header width.
     let titleFontSize = 0.22 * INCH_TO_PX; // Default title size in inches
     const titleText = card.title || 'Untitled Card';
     if (titleText.length > 15) titleFontSize *= 0.8;
     if (titleText.length > 22) titleFontSize *= 0.7;
 
+    const headerIconReserve = (card.size !== 'large' && card.iconType !== 'none')
+      ? (0.45 * INCH_TO_PX) + (0.1 * INCH_TO_PX) // icon width + a small gap before it
+      : 0;
+    const titleAvailableWidth = w - (textMargin * 2) - headerIconReserve;
     ctx.font = `bold ${titleFontSize}px "${titleFont}", system-ui, sans-serif`;
+    while (titleFontSize > 0.12 * INCH_TO_PX && ctx.measureText(titleText).width > titleAvailableWidth) {
+      titleFontSize *= 0.92;
+      ctx.font = `bold ${titleFontSize}px "${titleFont}", system-ui, sans-serif`;
+    }
+
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    // Content (title/art/description/footer) sits further in than the edge
-    // border (which now fills the full gap up to the safe-zone line) so
-    // there's a visible gap instead of text/art touching the border.
-    const textMargin = getContentInsetIn(size) * INCH_TO_PX;
     const titleY = textMargin;
     ctx.fillText(titleText, textMargin, titleY);
 
@@ -512,16 +552,28 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       ctx.textBaseline = 'top';
 
       const wrapLines = wrapCanvasText(ctx, descText, descWidth);
-      let currentLineY = descY;
       const lineHeight = descFontSize * 1.35;
-      const footerY = h - (0.4 * INCH_TO_PX);
+      // Height of the bottom-left/right callout tags below (shared with
+      // both `tagH` declarations further down). Was a hardcoded 0.4" gap
+      // here, independent of textMargin -- fine while textMargin was small,
+      // but once it grows (e.g. a wider edge border) the tags (positioned
+      // off textMargin) move up further than this fixed cutoff accounted
+      // for, so description text could run on past where the tags actually
+      // start and overlap them.
+      const footerTagHeight = 0.22 * INCH_TO_PX;
+      const footerY = h - textMargin - footerTagHeight;
 
-      for (let i = 0; i < wrapLines.length; i++) {
-        if (currentLineY + lineHeight > footerY) {
-          ctx.fillText(wrapLines[i] + '...', textMargin, currentLineY);
-          break;
-        }
-        ctx.fillText(wrapLines[i], textMargin, currentLineY);
+      // How many lines actually fit between the art box and the footer
+      // tags. Computed up front (rather than drawing line-by-line and
+      // bailing out mid-loop) so the *last* visible line -- the one that
+      // gets "..." appended when the description doesn't fully fit -- is
+      // itself still guaranteed to sit above footerY, instead of being
+      // drawn one line past where it was already known to overflow.
+      const maxLines = Math.max(1, Math.floor((footerY - descY) / lineHeight));
+      let currentLineY = descY;
+      for (let i = 0; i < wrapLines.length && i < maxLines; i++) {
+        const isTruncated = i === maxLines - 1 && wrapLines.length > maxLines;
+        ctx.fillText(isTruncated ? wrapLines[i] + '...' : wrapLines[i], textMargin, currentLineY);
         currentLineY += lineHeight;
       }
 
@@ -546,7 +598,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       if (card.bottomLeft) {
         const tagText = card.bottomLeft.toString();
         const textW = ctx.measureText(tagText).width;
-        const tagH = 0.22 * INCH_TO_PX;
+        const tagH = footerTagHeight;
         const tagY = h - textMargin - tagH;
         const tagW = textW + tagTextGap + (w * (8 / 320));
 
@@ -566,7 +618,7 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       if (card.bottomRight) {
         const tagText = card.bottomRight.toString();
         const textW = ctx.measureText(tagText).width;
-        const tagH = 0.22 * INCH_TO_PX;
+        const tagH = footerTagHeight;
         const tagW = textW + tagTextGap + (w * (8 / 320));
         const tagX = w - textMargin - tagW;
         const tagY = h - textMargin - tagH;
@@ -595,18 +647,16 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
         ctx.drawImage(backImg, -bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
         // Border over image -- flush against the trim edge (BORDER_INSET is
-        // 0), same as the front's edge border. Offset the stroke path by
-        // half its own width (and shrink the rect by the full width) so the
-        // whole stroke lands inside the trim box instead of straddling it.
+        // 0), same as the front's edge border, filled as a ring so its
+        // inner corner independently matches the safe-zone guide's 10px
+        // rounding instead of a stroke's shared inner/outer radius.
         if (edgeBorderLineWidth > 0) {
           const backBorderInset = BORDER_INSET * INCH_TO_PX;
-          ctx.strokeStyle = borderColorSetting;
-          ctx.lineWidth = edgeBorderLineWidth;
-          ctx.strokeRect(
-            backBorderInset + edgeBorderLineWidth / 2,
-            backBorderInset + edgeBorderLineWidth / 2,
-            w - backBorderInset * 2 - edgeBorderLineWidth,
-            h - backBorderInset * 2 - edgeBorderLineWidth
+          fillRoundedRing(
+            ctx,
+            backBorderInset, backBorderInset, w - backBorderInset * 2, h - backBorderInset * 2,
+            w * (16 / 320), edgeBorderLineWidth, w * (10 / 320),
+            borderColorSetting
           );
         }
         ctx.restore();
@@ -619,17 +669,15 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
     // Edge border -- flush against the trim edge (BORDER_INSET is 0),
-    // matching The Game Crafter's "Border Area" guide. Same half-width
-    // stroke offset as above so it lands fully inside the trim box.
+    // matching The Game Crafter's "Border Area" guide. Same ring fill as
+    // the front trim above, for the same independent inner-corner radius.
     const borderInset = BORDER_INSET * INCH_TO_PX;
     if (edgeBorderLineWidth > 0) {
-      ctx.strokeStyle = borderColorSetting;
-      ctx.lineWidth = edgeBorderLineWidth;
-      ctx.strokeRect(
-        borderInset + edgeBorderLineWidth / 2,
-        borderInset + edgeBorderLineWidth / 2,
-        w - borderInset * 2 - edgeBorderLineWidth,
-        h - borderInset * 2 - edgeBorderLineWidth
+      fillRoundedRing(
+        ctx,
+        borderInset, borderInset, w - borderInset * 2, h - borderInset * 2,
+        w * (16 / 320), edgeBorderLineWidth, w * (10 / 320),
+        borderColorSetting
       );
     }
 
