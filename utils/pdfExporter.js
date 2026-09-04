@@ -269,11 +269,19 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillText(titleText, textMargin, titleY);
 
     const bodyFont = card.bodyFont || 'Inter';
-    const subFontSize = 0.12 * INCH_TO_PX;
+    // Matches `.card-preview-headline`'s `font-size: 0.62rem` (9.92px at
+    // the live preview's 16px root) -- was a flat 0.12in, nearly 40% too
+    // large, which (compounded with the gap below) pushed the art box,
+    // description, and footer down noticeably further than the preview
+    // actually renders them, leaving unused blank space at the bottom of
+    // the card once the description ran out of room to grow into.
+    const subFontSize = w * (9.92 / 320);
     ctx.font = `500 ${subFontSize}px "${bodyFont}", system-ui, sans-serif`;
     ctx.fillStyle = card.themeColor || '#6366f1';
-    
-    const subY = titleY + titleFontSize + (0.05 * INCH_TO_PX);
+
+    // Matches `.card-preview-headline`'s `margin-top: 2px` (was a flat
+    // 0.05in/15px, three times too large for the same reason as above).
+    const subY = titleY + titleFontSize + (w * (2 / 320));
 
     // --- RENDER DUPLEX LAYOUT: LARGE 3"x5" VS STANDARD ---
     if (card.size === 'large') {
