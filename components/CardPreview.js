@@ -105,17 +105,40 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   const borderEnabled = card.borderEnabled !== false;
   const borderWidthPx = borderEnabled ? getBorderWidthIn(sizeInfo) * previewScale : 0;
 
-  // `.card-inner-trim`'s inner curve is the browser's outer border-radius
-  // minus its own border-width (floored at 0) -- so a plain 16px radius
-  // (matching `.card-face`'s own corner) goes square on the inside once the
-  // border is thicker than that. Asking for (SAFE_ZONE_RADIUS_PX + border
-  // width) as the outer radius makes that same subtraction land back on
-  // exactly SAFE_ZONE_RADIUS_PX, matching `.print-safe-zone-guide`'s own
-  // rounding. Floored at CARD_OUTER_RADIUS_PX so a thin/zero-width border
-  // never asks for an outer curve tighter than the card's own corner.
+  // The border needs independently-controlled outer/inner corner radii --
+  // outer matching `.card-face`'s own 16px corner exactly, inner matching
+  // `.print-safe-zone-guide`'s 10px rounding -- which a plain CSS `border`
+  // can't do (its inner curve is always the outer radius minus the border
+  // width, floored at 0). A previous attempt asked for a bigger *outer*
+  // radius (SAFE_ZONE_RADIUS_PX + border width) on the assumption that
+  // `.card-face`'s `overflow: hidden` clip would just crop it back down to
+  // 16px -- backwards: a *bigger* radius recedes *further* from the actual
+  // corner point, so the border's own paint fell short of the card's real
+  // 16px corner, leaving a visible gap of exposed background right at the
+  // corner. Rendered as an SVG ring instead (two rounded-rect subpaths,
+  // evenodd-filled) so both radii are exact and independent -- the same
+  // technique `fillRoundedRing` in pdfExporter.js already uses for the
+  // exported PNG, which is why the export's corners were never affected by
+  // this bug.
   const CARD_OUTER_RADIUS_PX = 16;
   const SAFE_ZONE_RADIUS_PX = 10;
-  const trimRadiusPx = Math.max(CARD_OUTER_RADIUS_PX, SAFE_ZONE_RADIUS_PX + borderWidthPx);
+  const previewHeightPx = sizeInfo.height * previewScale;
+  const roundedRectPath = (x, y, rectW, rectH, r) =>
+    `M${x + r},${y} H${x + rectW - r} A${r},${r} 0 0 1 ${x + rectW},${y + r} V${y + rectH - r} A${r},${r} 0 0 1 ${x + rectW - r},${y + rectH} H${x + r} A${r},${r} 0 0 1 ${x},${y + rectH - r} V${y + r} A${r},${r} 0 0 1 ${x + r},${y} Z`;
+  const borderRingPath = borderEnabled
+    ? roundedRectPath(trimInsetPx, trimInsetPx, PREVIEW_WIDTH_PX - trimInsetPx * 2, previewHeightPx - trimInsetPx * 2, CARD_OUTER_RADIUS_PX)
+      + ' ' + roundedRectPath(trimInsetPx + borderWidthPx, trimInsetPx + borderWidthPx, PREVIEW_WIDTH_PX - (trimInsetPx + borderWidthPx) * 2, previewHeightPx - (trimInsetPx + borderWidthPx) * 2, SAFE_ZONE_RADIUS_PX)
+    : '';
+
+  // Rendered once and reused on both card faces (front, and back whether or
+  // not it has a background image) -- an SVG rather than a plain div so its
+  // path coordinates (and therefore both corner radii) are exact, instead
+  // of relying on the browser's own border-radius/border-width interplay.
+  const borderRingSvg = borderEnabled && html`
+    <svg class="card-border-ring" viewBox="0 0 ${PREVIEW_WIDTH_PX} ${previewHeightPx}" preserveAspectRatio="none">
+      <path d=${borderRingPath} fill-rule="evenodd" style="fill: var(--card-border-color);" />
+    </svg>
+  `;
 
   // Font auto-scaling based on text lengths (Standard sizes only)
   const titleText = card.title || 'Untitled Card';
@@ -175,11 +198,8 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
           --card-art-icon-color: ${card.artIconColor || card.themeColor || '#6366f1'};
           --title-font: ${card.titleFont || 'Outfit'};
           --body-font: ${card.bodyFont || 'Inter'};
-          --card-trim-inset: ${trimInsetPx}px;
           --card-content-padding: ${contentPaddingPx}px;
           --card-border-color: ${card.borderColor || card.themeColor || '#6366f1'};
-          --card-border-width: ${borderWidthPx}px;
-          --card-trim-radius: ${trimRadiusPx}px;
         "
       >
         <!-- Glossy Overlay -->
@@ -188,7 +208,7 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
         <!-- FRONT SIDE -->
         <div class="card-face card-front">
           <!-- Outer themed trim -->
-          <div class="card-inner-trim"></div>
+          ${borderRingSvg}
 
           <!-- The Game Crafter print safe-zone guide -->
           ${showGuides && guidesAvailable && html`
@@ -311,11 +331,11 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
             if (backImage) {
               return html`
                 <img src=${backImage} class="card-back-background" alt="Card Back" />
-                <div class="card-inner-trim"></div>
+                ${borderRingSvg}
               `;
             }
             return html`
-              <div class="card-inner-trim"></div>
+              ${borderRingSvg}
               <div class="card-back-geometric-mesh"></div>
               <div class="card-back-medallion">
                 <div class="card-back-inner-diamond"></div>

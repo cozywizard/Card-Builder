@@ -413,15 +413,27 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // Bottom of the header block (title + optional headline). Everything
       // below -- the art box, then description, then footer -- stacks
       // directly beneath it, matching the live preview's flex-column order
-      // of header -> art -> description -> footer.
-      const headerBottomY = subY + subFontSize + (0.1 * INCH_TO_PX);
+      // of header -> art -> description -> footer. The gap matches
+      // `.card-header-region`'s `margin-bottom: 8px` (measured against the
+      // live DOM), scaled the same way as the other /320-referenced
+      // cosmetic measurements above (e.g. `accentW`) since it's a fixed CSS
+      // px in the always-320-wide live preview.
+      const headerBottomY = subY + subFontSize + (w * (8 / 320));
 
       // Draw Illustration Art Frame. This 45%-of-card-height zone is always
       // reserved right below the header -- matching `.card-art-box`, which
       // the live preview renders (with a white backing) whether or not art
       // has been uploaded -- so description/footer positioning lines up
-      // with the preview either way.
-      const artHeight = h * 0.45;
+      // with the preview either way. The 45% is of `.card-face`'s CONTENT
+      // box, not its full height -- `.card-art-box` is a flex child of
+      // `.card-face`, whose own top+bottom padding (textMargin) is
+      // subtracted before percentage heights resolve. Using the full `h`
+      // here (as this used to) overstates the art box more and more as
+      // textMargin grows (e.g. a wider edge border), stealing space the
+      // preview actually leaves for the description below -- confirmed by
+      // measuring the live DOM: art rendered at 45% of (faceHeight -
+      // 2*contentPadding), not 45% of faceHeight.
+      const artHeight = (h - textMargin * 2) * 0.45;
       const artMargin = textMargin; // same content padding as text -- sits inside the trim border, not flush against it
       const artY = headerBottomY;
       const artRadius = 0.06 * INCH_TO_PX;
@@ -528,8 +540,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // 3. Draw Card Description (Word Wrap + Font Auto-scaling). Starts
       // below the art box (not right after the headline) -- matching the
       // live preview, where the description is a separate flex item that
-      // comes after the art box, not stacked on top of it.
-      const descY = artY + artHeight + (0.12 * INCH_TO_PX);
+      // comes after the art box, not stacked on top of it. Gap matches
+      // `.card-art-box`'s `margin-bottom: 12px` (see headerBottomY above
+      // for why this is a /320 scale rather than a flat inch value).
+      const descY = artY + artHeight + (w * (12 / 320));
       const descWidth = w - (textMargin * 2);
       
       let descText = card.description || '';
@@ -561,7 +575,10 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // for, so description text could run on past where the tags actually
       // start and overlap them.
       const footerTagHeight = 0.22 * INCH_TO_PX;
-      const footerY = h - textMargin - footerTagHeight;
+      // Gap matches `.card-description-box`'s `margin-bottom: 12px` (see
+      // headerBottomY above) -- reserved above the footer tags so the last
+      // description line doesn't sit flush against them.
+      const footerY = h - textMargin - footerTagHeight - (w * (12 / 320));
 
       // How many lines actually fit between the art box and the footer
       // tags. Computed up front (rather than drawing line-by-line and
