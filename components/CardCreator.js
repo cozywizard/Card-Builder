@@ -2,7 +2,7 @@ import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import IconPicker from './IconPicker.js';
-import { CARD_SIZES, getCardSize, DPI, BLEED, getDefaultBorderWidthIn } from '../utils/binPacker.js';
+import { CARD_SIZES, getCardSize, DPI, BLEED, getDefaultBorderWidthIn, getDescFontSizeRem } from '../utils/binPacker.js';
 import { exportCardToPNG } from '../utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -169,6 +169,14 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
   // no upper bound, so typing a larger value is always possible. Doesn't
   // clamp card.borderWidth itself, just how far the slider track goes.
   const borderWidthSliderMax = Math.max(300, defaultBorderWidthPx);
+
+  // Description font-size slider (the "Custom" option below) -- mirrors
+  // the S/M/L/XL presets but lets the exact rem value be dragged instead
+  // of picked from a fixed list. Starts wherever the description is
+  // already sized (the last custom value set, or whatever "auto" would
+  // currently pick) so switching into Custom never causes a visible jump.
+  const descHasFooterCallouts = !!(card.bottomLeft || card.bottomRight);
+  const descFontSizeRemValue = getDescFontSizeRem(card, card.description || '', descHasFooterCallouts);
 
   return html`
     <div class="creator-control-panel glass-panel">
@@ -675,11 +683,12 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                 <label class="input-label">Description Font Size</label>
                 <div class="icon-toggle-row">
                   ${[
-                    { value: 'auto', label: 'Auto' },
-                    { value: 'sm',   label: 'S' },
-                    { value: 'md',   label: 'M' },
-                    { value: 'lg',   label: 'L' },
-                    { value: 'xl',   label: 'XL' },
+                    { value: 'auto',   label: 'Auto' },
+                    { value: 'sm',     label: 'S' },
+                    { value: 'md',     label: 'M' },
+                    { value: 'lg',     label: 'L' },
+                    { value: 'xl',     label: 'XL' },
+                    { value: 'custom', label: 'Custom' },
                   ].map(({ value, label }) => html`
                     <button
                       type="button"
@@ -688,6 +697,28 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                     >${label}</button>
                   `)}
                 </div>
+                ${card.descFontSize === 'custom' && html`
+                  <div class="border-thickness-row margin-top-sm">
+                    <input
+                      type="range"
+                      min="0.4"
+                      max="2"
+                      step="0.01"
+                      class="form-range-slider"
+                      value=${descFontSizeRemValue}
+                      onInput=${(e) => handleTextChange('descFontSizeCustom', e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.01"
+                      class="form-text-input border-thickness-number"
+                      value=${descFontSizeRemValue}
+                      onInput=${(e) => handleTextChange('descFontSizeCustom', e.target.value)}
+                    />
+                  </div>
+                  <p class="input-hint-text">Drag to set an exact size (in rem, same unit the S/M/L/XL presets use) — matches the live preview and the exported PNG/PDF exactly.</p>
+                `}
               </div>
 
               <!-- Callouts -->

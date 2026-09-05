@@ -1,7 +1,7 @@
 import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useRef, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
-import { getCardSize, BORDER_INSET, getBorderWidthIn, getContentInsetIn, getSafeZoneInsetIn } from '../utils/binPacker.js';
+import { getCardSize, BORDER_INSET, getBorderWidthIn, getContentInsetIn, getSafeZoneInsetIn, PREVIEW_WIDTH_PX, getDescFontSizeRem } from '../utils/binPacker.js';
 import { loadGoogleFont } from './CardCreator.js';
 
 const html = htm.bind(h);
@@ -92,7 +92,6 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   //   - contentPaddingPx: where header/art/description/footer content
   //     starts -- further in than the border so there's a visible gap,
   //     rather than text/art sitting flush against (or painting over) it.
-  const PREVIEW_WIDTH_PX = 320;
   const previewScale = PREVIEW_WIDTH_PX / sizeInfo.width;
   const trimInsetPx = BORDER_INSET * previewScale;
 
@@ -167,25 +166,15 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   // Bottom callouts collapse entirely when both are empty (see
   // card-footer-box below), handing their vertical space to the
   // description box (which is flex: 1 in app.css and grows to fill
-  // whatever room isn't claimed by the footer). "Auto" sizing has its own
-  // taller breakpoint table for that case so it actually uses the extra
-  // room instead of staying pinned to the cramped-layout sizes.
+  // whatever room isn't claimed by the footer). getDescFontSizeRem's
+  // "auto" mode has its own taller breakpoint table for that case so it
+  // actually uses the extra room instead of staying pinned to the
+  // cramped-layout sizes.
   const hasFooterCallouts = !!(card.bottomLeft || card.bottomRight);
-  const getDescFontSize = () => {
-    const sizeMap = { sm: '0.72rem', md: '0.85rem', lg: '1rem', xl: '1.15rem' };
-    if (card.descFontSize && card.descFontSize !== 'auto') return sizeMap[card.descFontSize] || '0.85rem';
-    const len = descText.length;
-    if (hasFooterCallouts) {
-      if (len > 250) return '0.62rem';
-      if (len > 180) return '0.7rem';
-      if (len > 100) return '0.78rem';
-      return '0.85rem';
-    }
-    if (len > 250) return '0.72rem';
-    if (len > 180) return '0.82rem';
-    if (len > 100) return '0.92rem';
-    return '1rem';
-  };
+  // Shared with the PNG/PDF exporter (utils/pdfExporter.js) so a chosen
+  // preset/custom size -- or the auto breakpoint picked here -- always
+  // renders identically in both places.
+  const getDescFontSize = () => `${getDescFontSizeRem(card, descText, hasFooterCallouts)}rem`;
 
   return html`
     <div class="card-preview-wrapper" style="--card-aspect: ${sizeInfo.width / sizeInfo.height}">

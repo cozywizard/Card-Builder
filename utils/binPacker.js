@@ -135,6 +135,70 @@ export function getContentInsetIn(borderWidthIn) {
   return borderWidthIn + CONTENT_BUFFER;
 }
 
+// Fixed CSS width (px) the live preview always renders a card face at,
+// regardless of the card's real physical size (see CardPreview.js's
+// PREVIEW_WIDTH_PX usage) -- shared here so descFontSizeRemToPrintPx below
+// can convert a CSS rem value into the same physical size the preview
+// actually renders it at.
+export const PREVIEW_WIDTH_PX = 320;
+
+// Description font-size presets (the "S/M/L/XL" quick-pick buttons in
+// CardCreator.js), in rem -- the same unit CardPreview.js sets directly as
+// a CSS font-size.
+export const DESC_FONT_SIZE_PRESETS_REM = { sm: 0.72, md: 0.85, lg: 1, xl: 1.15 };
+
+/**
+ * Resolves the description font size, in rem, that both the live preview
+ * and the exported PNG/PDF (via descFontSizeRemToPrintPx below) should use.
+ * Centralized here rather than duplicated in CardPreview.js and
+ * pdfExporter.js so the two can never silently drift apart.
+ *
+ * - "custom" (the font-size slider in CardCreator.js) or a fixed preset
+ *   (sm/md/lg/xl) always wins, regardless of text length.
+ * - "auto" (the default) picks from one of two breakpoint tables based on
+ *   text length -- the "no footer" table sizes text visibly larger, since
+ *   the bottom-left/right callout row is only rendered when at least one
+ *   of them has text, handing its space to the description box (flex: 1 in
+ *   app.css) the rest of the time.
+ */
+export function getDescFontSizeRem(card, descText, hasFooterCallouts) {
+  if (card.descFontSize === 'custom') {
+    const custom = Number(card.descFontSizeCustom);
+    return Number.isFinite(custom) && custom > 0 ? custom : DESC_FONT_SIZE_PRESETS_REM.md;
+  }
+  if (card.descFontSize && card.descFontSize !== 'auto') {
+    return DESC_FONT_SIZE_PRESETS_REM[card.descFontSize] || DESC_FONT_SIZE_PRESETS_REM.md;
+  }
+  const len = (descText || '').length;
+  if (hasFooterCallouts) {
+    if (len > 250) return 0.62;
+    if (len > 180) return 0.7;
+    if (len > 100) return 0.78;
+    return 0.85;
+  }
+  if (len > 250) return 0.72;
+  if (len > 180) return 0.82;
+  if (len > 100) return 0.92;
+  return 1;
+}
+
+/**
+ * Converts a description font size in rem (as CardPreview.js sets directly
+ * via CSS) into the physical size, in 300dpi print px, it actually renders
+ * at on a card of the given width. Canvas text (used by the PNG/PDF
+ * exporter) has no concept of rem/root font-size, so this is how the
+ * exporter reproduces the same physical text size the live preview shows,
+ * instead of falling back to its own separate (and previously
+ * out-of-sync) sizing logic. Assumes the page's root font-size is the
+ * unconfigured browser default of 16px -- true here, see app.css.
+ */
+export function descFontSizeRemToPrintPx(rem, cardWidthIn) {
+  const ROOT_FONT_PX = 16;
+  const previewScale = PREVIEW_WIDTH_PX / cardWidthIn; // preview px per inch
+  const inches = (rem * ROOT_FONT_PX) / previewScale;
+  return inches * DPI;
+}
+
 /**
  * Given a trim-size sizeInfo (as returned by getCardSize), returns the
  * bleed-inclusive output dimensions used for print-ready exports.

@@ -4,7 +4,7 @@
  * Uses jsPDF for rendering and a 300 DPI HTML Canvas for high fidelity.
  */
 
-import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED, BORDER_INSET, getBorderWidthIn, getContentInsetIn } from './binPacker.js';
+import { CARD_SIZES, SHEET_WIDTH, SHEET_HEIGHT, getSizeForType, getCardSize, DPI, BLEED, BORDER_INSET, getBorderWidthIn, getContentInsetIn, getDescFontSizeRem, descFontSizeRemToPrintPx } from './binPacker.js';
 import { loadGoogleFont } from '../components/CardCreator.js';
 
 // DPI resolution for printing (shared with binPacker.js so custom pixel
@@ -578,19 +578,19 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       const descWidth = w - (textMargin * 2);
       
       let descText = card.description || '';
-      let descFontSize = 0.11 * INCH_TO_PX;
-
-      if (descText.length > 100) descFontSize *= 0.9;
-      if (descText.length > 180) descFontSize *= 0.8;
-      if (descText.length > 250) descFontSize *= 0.7;
-
       // Bottom callouts (below) are skipped entirely when both are empty --
       // matching the live preview, where the description box is flex: 1 and
-      // reclaims the footer's space. Bumped ~15% here too (same ratio the
-      // preview's own no-footer breakpoint table uses) so "auto" sizing
-      // actually grows into that reclaimed room instead of leaving it blank.
+      // reclaims the footer's space.
       const hasFooterCallouts = !!(card.bottomLeft || card.bottomRight);
-      if (!hasFooterCallouts) descFontSize *= 1.15;
+      // getDescFontSizeRem/descFontSizeRemToPrintPx are shared with
+      // CardPreview.js (see there) so a chosen preset/custom size, or the
+      // auto breakpoint picked for this text length, always renders
+      // identically here as it does in the live preview -- previously this
+      // exporter had its own separate auto-only sizing formula that never
+      // consulted `card.descFontSize` at all, so choosing S/M/L/XL (or a
+      // custom size) in the editor had no effect on the exported PNG/PDF.
+      const descFontSizeRem = getDescFontSizeRem(card, descText, hasFooterCallouts);
+      let descFontSize = descFontSizeRemToPrintPx(descFontSizeRem, size.width);
 
       ctx.font = `${descFontSize}px "${bodyFont}", system-ui, sans-serif`;
       // Matches `.card-description-box`'s `color: var(--card-text)` in the
