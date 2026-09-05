@@ -219,28 +219,28 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ctx.fillStyle = card.bgColor || '#1e1e24';
     ctx.fillRect(-bleedPx, -bleedPx, w + bleedPx * 2, h + bleedPx * 2);
 
-    // Draw Card Edge Border -- matches the live preview's `.card-inner-trim`:
-    // a rounded, semi-transparent border flush against the trim edge
-    // (BORDER_INSET is 0), filling the full gap to the safe-zone line, same
-    // as The Game Crafter's own "Border Area" guide. Filled as a ring (not
-    // a centered stroke) so the outer curve can match the card's own 16px
-    // corner while the inner curve independently matches the safe-zone
-    // guide's 10px corner -- a stroke's inner/outer curves are always the
-    // same radius, which goes square on the inside once the border is
-    // thicker than that shared radius.
+    // Draw Card Edge Border -- matches the live preview's `.card-border-ring`:
+    // a rounded, fully-opaque border flush against the trim edge (BORDER_INSET
+    // is 0), filling the full gap to the safe-zone line, same as The Game
+    // Crafter's own "Border Area" guide. Filled as a ring (not a centered
+    // stroke) so the outer curve can match the card's own 16px corner while
+    // the inner curve independently matches the safe-zone guide's 10px
+    // corner -- a stroke's inner/outer curves are always the same radius,
+    // which goes square on the inside once the border is thicker than that
+    // shared radius. (Previously drawn at 0.7 alpha, which lightened
+    // whatever border color the user picked instead of reproducing it
+    // exactly -- the back border below was never given the same treatment,
+    // so front and back visibly disagreed on top of that.)
     if (edgeBorderLineWidth > 0) {
       const trimInset = BORDER_INSET * INCH_TO_PX;
       const outerRadius = w * (16 / 320);
       const innerRadius = w * (10 / 320);
-      ctx.save();
-      ctx.globalAlpha = 0.7;
       fillRoundedRing(
         ctx,
         trimInset, trimInset, w - trimInset * 2, h - trimInset * 2,
         outerRadius, edgeBorderLineWidth, innerRadius,
         borderColorSetting
       );
-      ctx.restore();
     }
 
     // 2. Card Header (Common for both layouts). Always anchored to the top
