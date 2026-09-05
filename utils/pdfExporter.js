@@ -579,10 +579,18 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       
       let descText = card.description || '';
       let descFontSize = 0.11 * INCH_TO_PX;
-      
+
       if (descText.length > 100) descFontSize *= 0.9;
       if (descText.length > 180) descFontSize *= 0.8;
       if (descText.length > 250) descFontSize *= 0.7;
+
+      // Bottom callouts (below) are skipped entirely when both are empty --
+      // matching the live preview, where the description box is flex: 1 and
+      // reclaims the footer's space. Bumped ~15% here too (same ratio the
+      // preview's own no-footer breakpoint table uses) so "auto" sizing
+      // actually grows into that reclaimed room instead of leaving it blank.
+      const hasFooterCallouts = !!(card.bottomLeft || card.bottomRight);
+      if (!hasFooterCallouts) descFontSize *= 1.15;
 
       ctx.font = `${descFontSize}px "${bodyFont}", system-ui, sans-serif`;
       // Matches `.card-description-box`'s `color: var(--card-text)` in the
@@ -605,7 +613,11 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // off textMargin) move up further than this fixed cutoff accounted
       // for, so description text could run on past where the tags actually
       // start and overlap them.
-      const footerTagHeight = 0.22 * INCH_TO_PX;
+      // Zero when both callouts are empty -- the footer tags aren't drawn
+      // at all in that case (see hasFooterCallouts above), so no space
+      // needs to be reserved for them and the description gets to run all
+      // the way down to the bottom margin instead.
+      const footerTagHeight = hasFooterCallouts ? 0.22 * INCH_TO_PX : 0;
       // Gap matches `.card-description-box`'s `margin-bottom: 12px` (see
       // headerBottomY above) -- reserved above the footer tags so the last
       // description line doesn't sit flush against them.

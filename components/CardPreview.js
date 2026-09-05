@@ -164,14 +164,27 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   };
 
   const descText = card.description || '';
+  // Bottom callouts collapse entirely when both are empty (see
+  // card-footer-box below), handing their vertical space to the
+  // description box (which is flex: 1 in app.css and grows to fill
+  // whatever room isn't claimed by the footer). "Auto" sizing has its own
+  // taller breakpoint table for that case so it actually uses the extra
+  // room instead of staying pinned to the cramped-layout sizes.
+  const hasFooterCallouts = !!(card.bottomLeft || card.bottomRight);
   const getDescFontSize = () => {
     const sizeMap = { sm: '0.72rem', md: '0.85rem', lg: '1rem', xl: '1.15rem' };
     if (card.descFontSize && card.descFontSize !== 'auto') return sizeMap[card.descFontSize] || '0.85rem';
     const len = descText.length;
-    if (len > 250) return '0.62rem';
-    if (len > 180) return '0.7rem';
-    if (len > 100) return '0.78rem';
-    return '0.85rem';
+    if (hasFooterCallouts) {
+      if (len > 250) return '0.62rem';
+      if (len > 180) return '0.7rem';
+      if (len > 100) return '0.78rem';
+      return '0.85rem';
+    }
+    if (len > 250) return '0.72rem';
+    if (len > 180) return '0.82rem';
+    if (len > 100) return '0.92rem';
+    return '1rem';
   };
 
   return html`
@@ -324,16 +337,20 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
               ${card.description || 'Provide a compelling description detailing card functions, attributes, lore, or abilities.'}
             </div>
 
-            <!-- Card Footer Callouts -->
-            <div class="card-footer-box">
-              ${card.bottomLeft ? html`
-                <div class="card-callout-tag callout-left">${card.bottomLeft}</div>
-              ` : html`<div></div>`}
-              
-              ${card.bottomRight ? html`
-                <div class="card-callout-tag callout-right">${card.bottomRight}</div>
-              ` : html`<div></div>`}
-            </div>
+            <!-- Card Footer Callouts (omitted entirely when both are empty
+                 so the description box above -- flex: 1 in app.css --
+                 expands to reclaim the space instead of leaving it blank) -->
+            ${hasFooterCallouts && html`
+              <div class="card-footer-box">
+                ${card.bottomLeft ? html`
+                  <div class="card-callout-tag callout-left">${card.bottomLeft}</div>
+                ` : html`<div></div>`}
+
+                ${card.bottomRight ? html`
+                  <div class="card-callout-tag callout-right">${card.bottomRight}</div>
+                ` : html`<div></div>`}
+              </div>
+            `}
           `}
         </div>
 
