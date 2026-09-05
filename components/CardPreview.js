@@ -95,15 +95,20 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   const PREVIEW_WIDTH_PX = 320;
   const previewScale = PREVIEW_WIDTH_PX / sizeInfo.width;
   const trimInsetPx = BORDER_INSET * previewScale;
-  const contentPaddingPx = getContentInsetIn(sizeInfo) * previewScale;
 
-  // Border thickness is no longer user-adjustable -- The Game Crafter's
-  // template requires it to span the full trim-edge-to-safe-zone-line gap
-  // (getBorderWidthIn) or not exist at all, so a thin/oversized border
-  // never gets drawn. `borderEnabled` defaults to true (a border shows
-  // unless explicitly turned off) to match the previous default appearance.
+  // Border thickness is fully user-controlled (the slider in CardCreator,
+  // `card.borderWidth`, entered in 300dpi print px) -- no minimum or
+  // maximum enforced, per explicit request. getBorderWidthIn falls back to
+  // The Game Crafter's recommended width (safe-zone-line reach) while
+  // unset, so a fresh card still starts print-safe.
+  // `borderEnabled` defaults to true (a border shows unless explicitly
+  // turned off) to match the previous default appearance -- content
+  // spacing still uses the resolved width even while disabled (below), so
+  // toggling the border on/off doesn't itself shove content around.
   const borderEnabled = card.borderEnabled !== false;
-  const borderWidthPx = borderEnabled ? getBorderWidthIn(sizeInfo) * previewScale : 0;
+  const borderWidthIn = getBorderWidthIn(card, sizeInfo);
+  const contentPaddingPx = getContentInsetIn(borderWidthIn) * previewScale;
+  const borderWidthPx = borderEnabled ? borderWidthIn * previewScale : 0;
 
   // The border needs independently-controlled outer/inner corner radii --
   // outer matching `.card-face`'s own 16px corner exactly, inner matching
@@ -123,8 +128,17 @@ export default function CardPreview({ card, forceSide = 'front', cardSizeDefault
   const CARD_OUTER_RADIUS_PX = 16;
   const SAFE_ZONE_RADIUS_PX = 10;
   const previewHeightPx = sizeInfo.height * previewScale;
-  const roundedRectPath = (x, y, rectW, rectH, r) =>
-    `M${x + r},${y} H${x + rectW - r} A${r},${r} 0 0 1 ${x + rectW},${y + r} V${y + rectH - r} A${r},${r} 0 0 1 ${x + rectW - r},${y + rectH} H${x + r} A${r},${r} 0 0 1 ${x},${y + rectH - r} V${y + r} A${r},${r} 0 0 1 ${x + r},${y} Z`;
+  // Border thickness is uncapped, so the "inner" rounded rect (inset by
+  // the border width on every side) can shrink to nothing or go negative
+  // once the border is thick enough to fill the whole card -- clamped here
+  // (width/height floored at 0, radius floored down to fit) so that just
+  // draws a filled card-colored shape instead of a self-intersecting path.
+  const roundedRectPath = (x, y, rectW, rectH, r) => {
+    const w = Math.max(0, rectW);
+    const hh = Math.max(0, rectH);
+    const radius = Math.max(0, Math.min(r, w / 2, hh / 2));
+    return `M${x + radius},${y} H${x + w - radius} A${radius},${radius} 0 0 1 ${x + w},${y + radius} V${y + hh - radius} A${radius},${radius} 0 0 1 ${x + w - radius},${y + hh} H${x + radius} A${radius},${radius} 0 0 1 ${x},${y + hh - radius} V${y + radius} A${radius},${radius} 0 0 1 ${x + radius},${y} Z`;
+  };
   const borderRingPath = borderEnabled
     ? roundedRectPath(trimInsetPx, trimInsetPx, PREVIEW_WIDTH_PX - trimInsetPx * 2, previewHeightPx - trimInsetPx * 2, CARD_OUTER_RADIUS_PX)
       + ' ' + roundedRectPath(trimInsetPx + borderWidthPx, trimInsetPx + borderWidthPx, PREVIEW_WIDTH_PX - (trimInsetPx + borderWidthPx) * 2, previewHeightPx - (trimInsetPx + borderWidthPx) * 2, SAFE_ZONE_RADIUS_PX)

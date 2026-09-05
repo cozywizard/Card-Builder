@@ -654,6 +654,57 @@ body {
   color: var(--text-primary);
 }
 
+.border-thickness-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.border-thickness-number {
+  width: 76px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.form-range-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.18);
+  outline: none;
+  cursor: pointer;
+}
+
+.form-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.form-range-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.form-range-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.18);
+}
+
 .color-picker-input-wrapper {
   display: flex;
   gap: 6px;

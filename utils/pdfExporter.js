@@ -108,15 +108,24 @@ function wrapCanvasText(ctx, text, maxWidth) {
  * into one multi-subpath shape (e.g. an evenodd-filled ring).
  */
 function traceRoundedRect(ctx, x, y, width, height, radius) {
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
+  // Border thickness is uncapped, so callers can end up asking for an
+  // "inner" rounded rect (inset by the border width on every side) that's
+  // shrunk to nothing or gone negative, once the border is thick enough to
+  // fill the whole card. Clamped here (width/height floored at 0, radius
+  // floored down to fit) so that degrades to a filled card-colored shape
+  // instead of a self-intersecting path.
+  const w = Math.max(0, width);
+  const hh = Math.max(0, height);
+  const r = Math.max(0, Math.min(radius, w / 2, hh / 2));
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + hh - r);
+  ctx.quadraticCurveTo(x + w, y + hh, x + w - r, y + hh);
+  ctx.lineTo(x + r, y + hh);
+  ctx.quadraticCurveTo(x, y + hh, x, y + hh - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
 }
 
@@ -189,16 +198,20 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     ensureFontLoaded(card.bodyFont || 'Inter')
   ]);
 
-  // Edge border color is customizable from the accent color. Thickness is
-  // NOT user-adjustable -- The Game Crafter's template requires it to span
-  // the full trim-edge-to-safe-zone-line gap (getBorderWidthIn) or not
-  // exist at all, so it can only ever be exactly print-safe or off, never a
-  // thin/oversized in-between. `borderEnabled` defaults to true (a border
+  // Edge border color is customizable from the accent color; thickness is
+  // fully user-controlled (the slider in CardCreator, card.borderWidth,
+  // entered in 300dpi print px) with no minimum or maximum enforced, per
+  // explicit request. getBorderWidthIn falls back to The Game Crafter's
+  // recommended width (safe-zone-line reach) while unset, so a fresh card
+  // still starts print-safe. `borderEnabled` defaults to true (a border
   // shows unless explicitly turned off) to match the previous default
-  // appearance. Shared by both the front trim and back border below.
+  // appearance -- content spacing below still uses the resolved width even
+  // while disabled, so toggling the border on/off doesn't itself reflow
+  // content. Shared by both the front trim and back border below.
   const borderColorSetting = card.borderColor || card.themeColor || '#6366f1';
   const borderEnabled = card.borderEnabled !== false;
-  const edgeBorderLineWidth = borderEnabled ? getBorderWidthIn(size) * INCH_TO_PX : 0;
+  const borderWidthIn = getBorderWidthIn(card, size);
+  const edgeBorderLineWidth = borderEnabled ? borderWidthIn * INCH_TO_PX : 0;
 
   if (side === 'front') {
     // 1. Draw Card Background (extends into the bleed border so a die-cut
@@ -237,9 +250,11 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
     const titleFont = card.titleFont || 'Outfit';
 
     // Content (title/art/description/footer) sits further in than the edge
-    // border (which now reaches past the safe-zone line) so there's a
-    // visible gap instead of text/art touching the border.
-    const textMargin = getContentInsetIn(size) * INCH_TO_PX;
+    // border -- and reflows automatically as the border's width changes,
+    // since this is measured from the border's own actual reach (whatever
+    // the user's slider is set to) -- so there's always a visible gap
+    // instead of text/art touching (or sitting under) the border.
+    const textMargin = getContentInsetIn(borderWidthIn) * INCH_TO_PX;
 
     // Auto-scale title font based on title length, then keep shrinking if
     // it still doesn't clear the header icon (if any). The char-count
@@ -441,35 +456,43 @@ export async function renderCardToCanvas(card, canvas, side = 'front', { bleed =
       // preview actually leaves for the description below -- confirmed by
       // measuring the live DOM: art rendered at 45% of (faceHeight -
       // 2*contentPadding), not 45% of faceHeight.
-      const artHeight = (h - textMargin * 2) * 0.45;
+      // Border thickness is uncapped, so textMargin can grow large enough
+      // that there's no room left for the art frame at all -- floored at 0
+      // (rather than letting them go negative) since `ctx.drawImage` throws
+      // once its destination width/height stops being positive, unlike the
+      // rounded-rect path helpers above, which just draw nothing useful for
+      // a negative/zero size instead of erroring.
+      const artHeight = Math.max(0, (h - textMargin * 2) * 0.45);
       const artMargin = textMargin; // same content padding as text -- sits inside the trim border, not flush against it
       const artY = headerBottomY;
       const artRadius = 0.06 * INCH_TO_PX;
-      const frameW = w - (artMargin * 2);
+      const frameW = Math.max(0, w - (artMargin * 2));
 
-      ctx.save();
-      ctx.fillStyle = '#ffffff';
-      drawRoundedRect(ctx, artMargin, artY, frameW, artHeight, artRadius);
-      ctx.fill();
-      ctx.clip();
+      if (frameW > 0 && artHeight > 0) {
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        drawRoundedRect(ctx, artMargin, artY, frameW, artHeight, artRadius);
+        ctx.fill();
+        ctx.clip();
 
-      if (card.cardArt) {
-        const artImg = await loadImage(card.cardArt);
-        if (artImg) {
-          const { dw, dh, dx, dy } = fitContain(artImg.width, artImg.height, frameW, artHeight);
-          ctx.drawImage(artImg, artMargin + dx, artY + dy, dw, dh);
+        if (card.cardArt) {
+          const artImg = await loadImage(card.cardArt);
+          if (artImg) {
+            const { dw, dh, dx, dy } = fitContain(artImg.width, artImg.height, frameW, artHeight);
+            if (dw > 0 && dh > 0) ctx.drawImage(artImg, artMargin + dx, artY + dy, dw, dh);
+          }
+        } else if (card.cardArtType === 'icon' && card.cardArtSvg) {
+          // Icon-library illustration mode (`.card-art-full-icon` in the live
+          // preview) -- previously silently ignored here, leaving the
+          // exported card's art frame blank.
+          const artIconImg = await loadColoredSvg(card.cardArtSvg, card.artIconColor || '#6366f1');
+          if (artIconImg) {
+            const { dw, dh, dx, dy } = fitContain(artIconImg.width, artIconImg.height, frameW, artHeight);
+            if (dw > 0 && dh > 0) ctx.drawImage(artIconImg, artMargin + dx, artY + dy, dw, dh);
+          }
         }
-      } else if (card.cardArtType === 'icon' && card.cardArtSvg) {
-        // Icon-library illustration mode (`.card-art-full-icon` in the live
-        // preview) -- previously silently ignored here, leaving the
-        // exported card's art frame blank.
-        const artIconImg = await loadColoredSvg(card.cardArtSvg, card.artIconColor || '#6366f1');
-        if (artIconImg) {
-          const { dw, dh, dx, dy } = fitContain(artIconImg.width, artIconImg.height, frameW, artHeight);
-          ctx.drawImage(artIconImg, artMargin + dx, artY + dy, dw, dh);
-        }
+        ctx.restore();
       }
-      ctx.restore();
 
       // DRAW ILLUSTRATION OVERLAY ICON IF SPECIFIED
       if (card.artIconType && card.artIconType !== 'none') {

@@ -86,16 +86,36 @@ export const BORDER_EXTRA_PX = 50;
 export const BORDER_EXTRA_IN = BORDER_EXTRA_PX / DPI; // ~0.167"
 
 /**
- * Width (in inches, from sizeInfo's own box edge) that the decorative edge
- * border is drawn at when enabled -- NOT user-adjustable. Per The Game
- * Crafter's template, the border must span at least the full gap from the
- * trim edge to the safe-zone line so it can't be too thin to survive
- * drift; on Poker specifically, BORDER_EXTRA_IN then carries it another
- * 50px past that line, into the safe zone itself, per explicit request.
+ * Width (in inches, from sizeInfo's own box edge) recommended for the
+ * decorative edge border -- used as the slider's starting value, and as
+ * the fallback while card.borderWidth is unset. Per The Game Crafter's
+ * template, the border should span at least the full gap from the trim
+ * edge to the safe-zone line so it can't be too thin to survive drift; on
+ * Poker specifically, BORDER_EXTRA_IN then carries it another 50px past
+ * that line, into the safe zone itself, per earlier request.
  */
-export function getBorderWidthIn(sizeInfo) {
+export function getDefaultBorderWidthIn(sizeInfo) {
   const isPoker = sizeInfo && sizeInfo.name === 'Poker';
   return getSafeZoneInsetIn(sizeInfo) + (isPoker ? BORDER_EXTRA_IN : 0);
+}
+
+/**
+ * Resolves the actual border width (in inches) to draw for a card: the
+ * user's own slider value (`card.borderWidth`, entered in 300dpi print px
+ * -- the same unit the rest of this app quotes pixel figures in) when set,
+ * else getDefaultBorderWidthIn's Game-Crafter-safe recommendation.
+ *
+ * Deliberately uncapped, in both directions -- full user control, per
+ * explicit request, including thinner than the safe zone or thick enough
+ * to fill most of the card. getContentInsetIn (below) is what keeps
+ * content clear of whatever width actually gets drawn, not a limit here.
+ */
+export function getBorderWidthIn(card, sizeInfo) {
+  const raw = card && card.borderWidth;
+  if (raw !== undefined && raw !== null && raw !== '' && !Number.isNaN(Number(raw))) {
+    return Math.max(0, Number(raw) / DPI);
+  }
+  return getDefaultBorderWidthIn(sizeInfo);
 }
 
 // Extra clearance (in inches) kept between the edge border's own inner
@@ -106,14 +126,13 @@ export const CONTENT_BUFFER = 0.08; // inches
 /**
  * Inset (in inches, from sizeInfo's own box edge) that title/art/
  * description/footer content is drawn at -- clear of the edge border,
- * which now reaches past the safe-zone line (see getBorderWidthIn), so
- * content is measured from the border's own actual reach rather than the
- * safe-zone line itself. Content would otherwise end up drawn underneath
- * the border once the border got wider than content's old, independent
- * inset.
+ * whatever width it's actually been set to (see getBorderWidthIn) -- so
+ * content is measured from the border's own actual reach, and reflows
+ * automatically as that width changes, rather than a fixed independent
+ * inset that the border could grow past and end up drawn underneath.
  */
-export function getContentInsetIn(sizeInfo) {
-  return getBorderWidthIn(sizeInfo) + CONTENT_BUFFER;
+export function getContentInsetIn(borderWidthIn) {
+  return borderWidthIn + CONTENT_BUFFER;
 }
 
 /**

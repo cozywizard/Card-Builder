@@ -2,7 +2,7 @@ import { h } from 'https://esm.sh/preact@10.19.6';
 import { useState, useEffect } from 'https://esm.sh/preact@10.19.6/hooks';
 import htm from 'https://esm.sh/htm@3.1.1';
 import IconPicker from './IconPicker.js';
-import { CARD_SIZES, getCardSize, DPI, BLEED } from '../utils/binPacker.js';
+import { CARD_SIZES, getCardSize, DPI, BLEED, getDefaultBorderWidthIn } from '../utils/binPacker.js';
 import { exportCardToPNG } from '../utils/pdfExporter.js';
 
 const html = htm.bind(h);
@@ -153,6 +153,22 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
   const pngDimsLabel = sizeInfo.isCustom
     ? `${sizeInfo.widthPx}×${sizeInfo.heightPx}px`
     : `${Math.round(sizeInfo.width * DPI)}×${Math.round(sizeInfo.height * DPI)}px`;
+
+  // Border thickness slider -- fully user-controlled (card.borderWidth, in
+  // 300dpi print px, matching every other pixel figure quoted elsewhere in
+  // this app), no minimum or maximum enforced on the underlying value. A
+  // fresh/untouched card shows and starts from The Game Crafter's
+  // recommended width (reaches the safe-zone line) rather than 0, so it's
+  // still print-safe until the user deliberately changes it.
+  const defaultBorderWidthPx = Math.round(getDefaultBorderWidthIn(sizeInfo) * DPI);
+  const borderWidthPx = card.borderWidth === undefined || card.borderWidth === null || card.borderWidth === ''
+    ? defaultBorderWidthPx
+    : Number(card.borderWidth);
+  // The slider's own drag range is just a generous default reach (roughly
+  // a 1" border on any card size) -- the paired number input next to it has
+  // no upper bound, so typing a larger value is always possible. Doesn't
+  // clamp card.borderWidth itself, just how far the slider track goes.
+  const borderWidthSliderMax = Math.max(300, defaultBorderWidthPx);
 
   return html`
     <div class="creator-control-panel glass-panel">
@@ -364,8 +380,31 @@ export default function CardCreator({ card, onChangeCard, onSaveCard }) {
                     onClick=${() => handleTextChange('borderEnabled', false)}
                   >Off</button>
                 </div>
-                <p class="input-hint-text">When on, the border always spans from the card's outer edge to the print-safe zone line — matching The Game Crafter's "Border Area" guide exactly, so it's no longer a manual thickness to get wrong.</p>
               </div>
+            </div>
+
+            <div class="form-group">
+              <label class="input-label">Border Thickness (px)</label>
+              <div class="border-thickness-row">
+                <input
+                  type="range"
+                  min="0"
+                  max=${borderWidthSliderMax}
+                  step="1"
+                  class="form-range-slider"
+                  value=${borderWidthPx}
+                  onInput=${(e) => handleTextChange('borderWidth', e.target.value)}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  class="form-text-input border-thickness-number"
+                  value=${borderWidthPx}
+                  onInput=${(e) => handleTextChange('borderWidth', e.target.value)}
+                />
+              </div>
+              <p class="input-hint-text">Full manual control — no minimum or maximum. Card text and art reflow automatically to stay clear of whatever thickness you set. Defaults to ${defaultBorderWidthPx}px, The Game Crafter's recommended reach to the print-safe zone line; thinner risks looking uneven after trim drift.</p>
             </div>
 
             <!-- Font Styles -->
